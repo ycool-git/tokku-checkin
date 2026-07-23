@@ -401,6 +401,12 @@
   .summary-row .v{font-weight:700;color:var(--text);text-align:right;}
 
   /* ---------- Face auth status stamp (embedded in guest card) ---------- */
+  .facethumb{
+    width:36px;height:36px;border-radius:9px;
+    object-fit:cover;
+    border:1.5px solid var(--line);
+    flex-shrink:0;
+  }
   .gstamp{
     font-size:10px;font-weight:800;
     padding:3px 10px;
@@ -654,8 +660,20 @@
             <input type="file" accept="image/*" capture="user" style="display:none" onchange="handleFaceCapture(this)">
           </label>
 
+          <div class="btnrow" id="faceConfirmArea" style="display:none;">
+            <button class="btn btn-ghost" onclick="retakeFace()" data-i18n="btnRetake"></button>
+            <button class="btn btn-primary" onclick="confirmFaceCapture()" data-i18n="btnUsePhoto"></button>
+          </div>
+
           <div class="facestatus" id="faceStatus"></div>
           <div class="locstatus" id="locStatus"></div>
+        </div>
+
+        <div id="alreadyCheckedInArea" style="display:none;">
+          <div class="center">
+            <div class="stamp show" style="position:static;"><div class="s1" data-i18n="alreadyCheckedInStampS1"></div><div class="s2">CHECKED IN</div></div>
+            <p class="scr-sub" data-i18n="alreadyCheckedInText"></p>
+          </div>
         </div>
 
         <div id="stayConfirmArea" style="display:none;">
@@ -1117,7 +1135,7 @@ function populateReview(targetId){
     }
 
     return `<div class="guestcard">
-      <div class="ghead"><span class="gname">${guestLabel(g.gnum, g.isRep)}</span>${withStatus ? faceStampHTML(g.gnum) : ''}</div>
+      <div class="ghead"><span class="gname">${guestLabel(g.gnum, g.isRep)}</span>${withStatus ? faceThumbHTML(g.gnum) : ''}${withStatus ? faceStampHTML(g.gnum) : ''}</div>
       ${rows}
     </div>`;
   });
@@ -1166,6 +1184,12 @@ function faceStampHTML(gnum){
   if(!status) return '';
   const key = status === 'done' ? 'faceStatusDone' : status === 'current' ? 'faceStatusCurrent' : 'faceStatusPending';
   return `<span class="gstamp gstamp-${status}">${t(key)}</span>`;
+}
+
+function faceThumbHTML(gnum){
+  const cap = faceCaptures[gnum];
+  if(!cap || !cap.dataUrl) return '';
+  return `<img class="facethumb" src="${cap.dataUrl}" alt="">`;
 }
 
 function buildDayGuestQueue(){
@@ -1235,6 +1259,7 @@ function renderFaceStep(){
   document.getElementById('faceQueueLabel').textContent = t('faceQueueLabel', {n: dayGuestIndex + 1, total, name: cur.name});
   document.getElementById('faceCaptureBtnLabel').textContent = t('faceCaptureBtn', {name: cur.name});
   document.getElementById('faceCaptureBtn').style.display = 'flex';
+  document.getElementById('faceConfirmArea').style.display = 'none';
   document.getElementById('faceStatus').textContent = '';
   document.getElementById('camPreview').style.display = 'none';
   document.getElementById('camSilhouette').style.display = 'block';
@@ -1277,7 +1302,7 @@ function handleFaceCapture(inputEl){
     const result = String(reader.result || '');
     const comma = result.indexOf(',');
     const base64 = comma >= 0 ? result.slice(comma + 1) : '';
-    faceCaptures[cur.gnum] = { base64, mimeType: file.type || 'image/jpeg' };
+    faceCaptures[cur.gnum] = { base64, mimeType: file.type || 'image/jpeg', dataUrl: result };
 
     const flash = document.getElementById('flash');
     flash.style.transition = 'none'; flash.style.opacity = '.9';
@@ -1293,23 +1318,40 @@ function handleFaceCapture(inputEl){
 
     document.getElementById('faceStatus').textContent = t('faceCaptured', {name: cur.name});
     document.getElementById('faceCaptureBtn').style.display = 'none';
+    document.getElementById('faceConfirmArea').style.display = 'flex';
 
-    setTimeout(()=>{
-      dayGuestIndex++;
-      populateReview('dayReviewSummary');
-      if(dayGuestIndex < dayGuestQueue.length){
-        renderFaceStep();
-      } else {
-        document.getElementById('faceAuthSection').style.display = 'none';
-        document.getElementById('stayConfirmArea').style.display = 'block';
-      }
-    }, 900);
+    populateReview('dayReviewSummary');
   };
   reader.onerror = function(){
     alert(t('uploadFailed'));
   };
   reader.readAsDataURL(file);
   inputEl.value = '';
+}
+
+function retakeFace(){
+  const cur = dayGuestQueue[dayGuestIndex];
+  delete faceCaptures[cur.gnum];
+
+  document.getElementById('faceConfirmArea').style.display = 'none';
+  document.getElementById('faceCaptureBtn').style.display = 'flex';
+  document.getElementById('camPreview').style.display = 'none';
+  document.getElementById('camSilhouette').style.display = 'block';
+  document.getElementById('faceStatus').textContent = '';
+
+  populateReview('dayReviewSummary');
+}
+
+function confirmFaceCapture(){
+  document.getElementById('faceConfirmArea').style.display = 'none';
+  dayGuestIndex++;
+  populateReview('dayReviewSummary');
+  if(dayGuestIndex < dayGuestQueue.length){
+    renderFaceStep();
+  } else {
+    document.getElementById('faceAuthSection').style.display = 'none';
+    document.getElementById('stayConfirmArea').style.display = 'block';
+  }
 }
 
 function doStayConfirm(){
@@ -1469,6 +1511,10 @@ const I18N = {
   locOk: {ja:'位置情報を記録しました', en:'Location recorded', ko:'위치 정보가 기록되었습니다', zhCN:'已记录位置信息', zhTW:'已記錄位置資訊'},
   locDenied: {ja:'位置情報を取得できませんでした（ホストが後ほど確認します）', en:"Couldn't get your location (your host will follow up)", ko:'위치 정보를 가져올 수 없었습니다（호스트가 추후 확인합니다）', zhCN:'无法获取位置信息（房东将稍后确认）', zhTW:'無法取得位置資訊（房東將稍後確認）'},
   locUnsupported: {ja:'このブラウザでは位置情報が取得できません', en:"This browser doesn't support location", ko:'이 브라우저에서는 위치 정보를 가져올 수 없습니다', zhCN:'此浏览器不支持获取位置信息', zhTW:'此瀏覽器不支援取得位置資訊'},
+  btnRetake: {ja:'撮り直す', en:'Retake Photo', ko:'다시 촬영', zhCN:'重新拍摄', zhTW:'重新拍攝'},
+  btnUsePhoto: {ja:'この写真で進む', en:'Use This Photo', ko:'이 사진으로 진행', zhCN:'使用此照片', zhTW:'使用此照片'},
+  alreadyCheckedInStampS1: {ja:'手続き済み', en:'Completed', ko:'완료', zhCN:'已完成', zhTW:'已完成'},
+  alreadyCheckedInText: {ja:'チェックインの手続きはすでに完了しています。本人確認は、ホストが後ほど提出書類と照らし合わせて確認いたします。追加の操作は必要ありません。', en:'Your check-in has already been completed. Your host will review your ID against your submitted documents afterward — no further action is needed.', ko:'체크인 절차는 이미 완료되었습니다. 본인 확인은 호스트가 이후 제출하신 서류와 대조하여 확인합니다. 추가 조작은 필요하지 않습니다.', zhCN:'入住手续已经完成。身份确认将由房东稍后与您提交的证件核对确认，无需进行其他操作。', zhTW:'入住手續已經完成。身份確認將由房東稍後與您提交的證件核對確認，無需進行其他操作。'},
   btnStayConfirm: {ja:'この内容で滞在を確認する', en:'Confirm My Stay', ko:'이 내용으로 숙박 확인', zhCN:'确认入住信息', zhTW:'確認入住資訊'},
   stayStampS1: {ja:'確認', en:'Confirmed', ko:'확인', zhCN:'确认', zhTW:'確認'},
   labelRoom: {ja:'お部屋番号', en:'Room Number', ko:'객실 번호', zhCN:'房间号', zhTW:'房間號'},
@@ -1554,7 +1600,11 @@ function setLang(lang){
   if(activeScreen){
     const n = parseInt(activeScreen.id.replace('screen',''));
     if(n === 2){ populateReview('reviewSummary'); updateSendButton(); }
-    if(n === 4){ relabelFaceStep(); }
+    if(n === 4 && !day4NoReservation){ relabelFaceStep(); populateReview('dayReviewSummary'); }
+    if(n === 4 && day4NoReservation){
+      const el = document.getElementById('dayReviewSummary');
+      if(el) el.innerHTML = '<div class="banner banner-error" style="display:flex;"><span>⚠</span><div>' + t('noReservationFound') + '</div></div>';
+    }
   }
 }
 
@@ -1563,6 +1613,10 @@ function setLang(lang){
 // In production this URL carries no reservation ID: the backend looks up
 // "today's check-in, not yet checked out" on its own (see chat discussion).
 const ARRIVAL_MODE = new URLSearchParams(location.search).get('mode') === 'arrival';
+
+const STATUS_CHECKED_IN = 'チェックイン済み';
+
+let day4NoReservation = false;
 
 async function loadTodayReservation(){
   try{
@@ -1579,6 +1633,14 @@ async function loadTodayReservation(){
   }
 }
 
+function showAlreadyCheckedIn(){
+  document.getElementById('faceAuthSection').style.display = 'none';
+  document.getElementById('stayConfirmArea').style.display = 'none';
+  document.getElementById('stayConfirmed').style.display = 'none';
+  document.getElementById('alreadyCheckedInArea').style.display = 'block';
+  populateReview('dayReviewSummary');
+}
+
 async function selectLang(lang){
   setLang(lang);
 
@@ -1591,13 +1653,25 @@ async function selectLang(lang){
 
     document.getElementById('langGate').style.display = 'none';
     document.getElementById('mainFlow').style.display = 'block';
-    goStep(4);
 
     if(!found){
+      day4NoReservation = true;
+      goStep(4);
       document.getElementById('faceAuthSection').style.display = 'none';
       const el = document.getElementById('dayReviewSummary');
       if(el) el.innerHTML = '<div class="banner banner-error" style="display:flex;"><span>⚠</span><div>' + t('noReservationFound') + '</div></div>';
+      return;
     }
+
+    day4NoReservation = false;
+
+    if(serverGuestData && serverGuestData.status === STATUS_CHECKED_IN){
+      goStep(4);
+      showAlreadyCheckedIn();
+      return;
+    }
+
+    goStep(4);
     return;
   }
 
