@@ -474,6 +474,7 @@
 
   .facestatus{font-size:12.5px;color:var(--success);text-align:center;font-weight:700;margin-top:10px;min-height:16px;}
   .locstatus{font-size:11.5px;color:var(--muted);text-align:center;margin-top:4px;min-height:14px;}
+  .locpermhint{white-space:pre-line;line-height:1.8;}
 
   .stamp{
     width:104px;height:104px;
@@ -641,8 +642,25 @@
           <div id="dayReviewSummary"></div>
         </div>
 
+        <div class="section" id="locPermissionArea">
+          <div class="section-head"><span class="tag">STEP 4-A</span><h3 data-i18n="locPermTitle"></h3></div>
+          <div class="hint locpermhint" data-i18n="locPermExplain"></div>
+
+          <button type="button" class="btn btn-brass mt8" id="locAllowBtn" onclick="requestArrivalLocation()" data-i18n="btnAllowLocation"></button>
+
+          <div class="locstatus" id="locStatus"></div>
+
+          <div class="banner banner-error" id="locErrorBanner" style="display:none;">
+            <span>⚠</span>
+            <div>
+              <div id="locErrorText"></div>
+              <button type="button" class="btn btn-ghost mt8" id="locRetryBtn" onclick="retryLocation()" data-i18n="btnRetryLocation"></button>
+            </div>
+          </div>
+        </div>
+
         <div class="section" id="faceAuthSection">
-          <div class="section-head"><span class="tag">STEP 4-A</span><h3 data-i18n="faceSectionTitle"></h3></div>
+          <div class="section-head"><span class="tag">STEP 4-B</span><h3 data-i18n="faceSectionTitle"></h3></div>
           <div class="facequeue" id="faceQueueLabel"></div>
           <div class="camframe" id="camframe">
             <div class="cap-badge"><span class="dot"></span>LIVE</div>
@@ -664,15 +682,6 @@
           </div>
 
           <div class="facestatus" id="faceStatus"></div>
-          <div class="locstatus" id="locStatus"></div>
-
-          <div class="banner banner-error" id="locErrorBanner" style="display:none;">
-            <span>⚠</span>
-            <div>
-              <div id="locErrorText"></div>
-              <button type="button" class="btn btn-ghost mt8" id="locRetryBtn" onclick="retryLocation()" data-i18n="btnRetryLocation"></button>
-            </div>
-          </div>
         </div>
 
         <div id="alreadyCheckedInArea" style="display:none;">
@@ -1408,6 +1417,11 @@ function hideLocError(){
   if(banner) banner.style.display = 'none';
 }
 
+function updateLocPermUI(){
+  const btn = document.getElementById('locAllowBtn');
+  if(btn) btn.style.display = (arrivalLocationStatus === 'ok') ? 'none' : 'flex';
+}
+
 function requestArrivalLocation(){
   const el = document.getElementById('locStatus');
   hideLocError();
@@ -1417,6 +1431,7 @@ function requestArrivalLocation(){
       arrivalLocationStatus = 'unsupported';
       if(el) el.textContent = '';
       showLocError('locUnsupportedBannerText');
+      updateLocPermUI();
       resolve(false);
       return;
     }
@@ -1429,6 +1444,7 @@ function requestArrivalLocation(){
         const s = document.getElementById('locStatus');
         if(s) s.textContent = t('locOk');
         hideLocError();
+        updateLocPermUI();
         resolve(true);
       },
       ()=>{
@@ -1436,6 +1452,7 @@ function requestArrivalLocation(){
         const s = document.getElementById('locStatus');
         if(s) s.textContent = '';
         showLocError('locDeniedBannerText');
+        updateLocPermUI();
         resolve(false);
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -1464,8 +1481,12 @@ function resetStayConfirm(){
 
   if(!dayGuestQueue.length){
     document.getElementById('faceAuthSection').style.display = 'none';
+    document.getElementById('locPermissionArea').style.display = 'none';
     return;
   }
+
+  document.getElementById('locPermissionArea').style.display = 'block';
+  updateLocPermUI();
 
   // resume from the first guest who doesn't have a captured photo yet,
   // rather than wiping already-taken photos every time this screen is re-entered
@@ -1479,7 +1500,6 @@ function resetStayConfirm(){
   }
 
   document.getElementById('faceAuthSection').style.display = 'block';
-  requestArrivalLocation();
   renderFaceStep();
 }
 
@@ -1755,6 +1775,9 @@ const I18N = {
   screen4Title: {ja:'チェックイン当日のご確認', en:'Arrival Day Confirmation', ko:'체크인 당일 확인', zhCN:'入住当天确认', zhTW:'入住當天確認'},
   screen4Sub: {ja:'ご到着後、ご自身のスマートフォンで入力内容にお間違いがないかご確認のうえ、本人確認用のお写真の撮影と滞在確認を行ってください。', en:'After you arrive, please use your own smartphone to check your information, take a quick ID photo, and confirm your stay.', ko:'도착 후 본인의 스마트폰으로 입력 내용에 오류가 없는지 확인하시고, 본인 확인용 사진 촬영과 숙박 확인을 진행해 주세요.', zhCN:'抵达后，请使用您自己的智能手机确认填写内容无误，并完成身份确认拍照及入住确认。', zhTW:'抵達後，請使用您自己的智慧型手機確認填寫內容無誤，並完成身份確認拍照及入住確認。'},
   screen4Banner: {ja:'内容に相違がある場合はホストまでご連絡ください。相違なければ、本人確認用の撮影にお進みください。', en:'If anything is incorrect, please contact your host. If everything is correct, please proceed to the ID photo.', ko:'내용에 차이가 있으면 호스트에게 연락해 주세요. 문제가 없으면 본인 확인용 촬영으로 진행해 주세요.', zhCN:'如内容有误，请联系房东。确认无误后请进行身份确认拍照。', zhTW:'如內容有誤，請聯繫房東。確認無誤後請進行身份確認拍照。'},
+  locPermTitle: {ja:'位置情報の利用について', en:'About Location Access', ko:'위치 정보 이용에 대해', zhCN:'关于位置信息的使用', zhTW:'關於位置資訊的使用'},
+  locPermExplain: {ja:'チェックイン手続き（顔写真の撮影）の際、スマホの位置情報（GPS）の許可が必要となります。これは「現地にご到着されていること」を法令に基づき確認するための機能です。\n\n画面に「"（このサイト）"が位置情報の利用を求めています」と表示されましたら、「許可」または「アプリの使用中のみ許可」をお選びください。\n\n※画面が進まない場合は、お使いのスマホの設定で「ブラウザ（Safari/Chrome）の位置情報アクセス」が許可されているかご確認ください。', en:"To complete check-in (taking your ID photo), your smartphone needs to allow Location (GPS) access. This confirms, as required by law, that you have actually arrived at the property.\n\nWhen a prompt asks whether this page can use your location, choose Allow or Allow While Using App.\n\nIf nothing happens, please check that location access for your browser (Safari/Chrome) is allowed in your phone settings.", ko:'체크인 절차(얼굴 사진 촬영) 진행 시, 스마트폰의 위치 정보(GPS) 허용이 필요합니다. 이는 법령에 따라 실제로 현지에 도착하셨음을 확인하기 위한 기능입니다.\n\n화면에 이 사이트가 위치 정보 사용을 요청한다고 표시되면 허용 또는 앱 사용 중에만 허용을 선택해 주세요.\n\n화면이 진행되지 않을 경우, 스마트폰 설정에서 브라우저(Safari/Chrome)의 위치 정보 접근이 허용되어 있는지 확인해 주세요.', zhCN:'在办理入住手续（拍摄身份照片）时，需要允许手机的位置信息（GPS）访问。这是依据法律法规确认您确实已到达该住宅的功能。\n\n当屏幕出现是否允许该网站使用您的位置信息提示时，请选择允许或仅在使用应用期间允许。\n\n※如果页面无法继续，请检查手机设置中是否已允许浏览器（Safari/Chrome）访问位置信息。', zhTW:'在辦理入住手續（拍攝身份照片）時，需要允許手機的位置資訊（GPS）存取。這是依據法規確認您確實已抵達該住宅的功能。\n\n當畫面出現是否允許此網站使用您的位置資訊提示時，請選擇允許或僅在使用App期間允許。\n\n※如果畫面無法繼續，請檢查手機設定中是否已允許瀏覽器（Safari/Chrome）存取位置資訊。'},
+  btnAllowLocation: {ja:'位置情報を許可する', en:'Allow Location Access', ko:'위치 정보 허용하기', zhCN:'允许使用位置信息', zhTW:'允許使用位置資訊'},
   faceSectionTitle: {ja:'本人確認用の撮影（宿泊者おひとりずつ）', en:'ID Photo Capture (One Guest at a Time)', ko:'본인 확인용 촬영（숙박자 개별 진행）', zhCN:'身份确认拍摄（依序进行）', zhTW:'身份確認拍攝（依序進行）'},
   faceStatusPending: {ja:'未撮影', en:'Not photographed', ko:'미촬영', zhCN:'待拍摄', zhTW:'待拍攝'},
   faceStatusCurrent: {ja:'撮影中', en:'Capturing', ko:'촬영 중', zhCN:'拍摄中', zhTW:'拍攝中'},
