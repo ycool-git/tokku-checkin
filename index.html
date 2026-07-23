@@ -1294,8 +1294,10 @@ function populateReview(targetId){
         <div class="summary-row"><div class="k">${t('labelEmail')}</div><div class="v">${email}</div></div>`;
     }
 
+    const withDocThumb = targetId === 'reviewSummary';
+
     return `<div class="guestcard">
-      <div class="ghead"><span class="gname">${guestLabel(g.gnum, g.isRep)}</span>${withStatus ? faceThumbHTML(g.gnum) : ''}${withStatus ? faceStampHTML(g.gnum) : ''}</div>
+      <div class="ghead"><span class="gname">${guestLabel(g.gnum, g.isRep)}</span>${withDocThumb ? docThumbHTML(g.gnum, g.isRep) : ''}${withStatus ? faceThumbHTML(g.gnum) : ''}${withStatus ? faceStampHTML(g.gnum) : ''}</div>
       ${rows}
     </div>`;
   });
@@ -1353,6 +1355,14 @@ function faceThumbHTML(gnum){
   return `<img class="facethumb" src="${cap.dataUrl}" alt="">`;
 }
 
+function docThumbHTML(gnum, isRep){
+  const slotId = isRep ? 'repIdUpload' : ('passportUpload-'+gnum);
+  const file = uploadedFiles[slotId];
+  if(!file || !file.base64) return '';
+  if(file.mimeType === 'application/pdf') return '';
+  return `<img class="facethumb" src="data:${file.mimeType};base64,${file.base64}" alt="">`;
+}
+
 function buildDayGuestQueue(){
   dayGuestQueue = currentGuests(true).map(g=>({
     gnum: g.gnum,
@@ -1401,10 +1411,20 @@ function resetStayConfirm(){
   document.getElementById('stayStamp').classList.remove('show');
 
   buildDayGuestQueue();
-  faceCaptures = {};
 
   if(!dayGuestQueue.length){
     document.getElementById('faceAuthSection').style.display = 'none';
+    return;
+  }
+
+  // resume from the first guest who doesn't have a captured photo yet,
+  // rather than wiping already-taken photos every time this screen is re-entered
+  const resumeIdx = dayGuestQueue.findIndex(g => !faceCaptures[g.gnum]);
+  dayGuestIndex = resumeIdx === -1 ? dayGuestQueue.length : resumeIdx;
+
+  if(dayGuestIndex >= dayGuestQueue.length){
+    document.getElementById('faceAuthSection').style.display = 'none';
+    document.getElementById('stayConfirmArea').style.display = 'block';
     return;
   }
 
