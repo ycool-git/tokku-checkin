@@ -464,11 +464,8 @@
   .cap-badge .dot{width:6px;height:6px;border-radius:50%;background:#e0554b;animation:blink 1.4s infinite;}
   @keyframes blink{50%{opacity:.2;}}
 
-  .faceprogress{
-    height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin:16px 0 8px;
-  }
-  .faceprogress .bar{height:100%;width:0%;background:var(--brass);transition:width 1.4s ease;}
-  .facestatus{font-size:12.5px;color:var(--muted);text-align:center;}
+  .facestatus{font-size:12.5px;color:var(--success);text-align:center;font-weight:700;margin-top:10px;min-height:16px;}
+  .locstatus{font-size:11.5px;color:var(--muted);text-align:center;margin-top:4px;min-height:14px;}
 
   .stamp{
     width:104px;height:104px;
@@ -646,17 +643,19 @@
           <div class="camframe" id="camframe">
             <div class="cap-badge"><span class="dot"></span>LIVE</div>
             <div class="guide"></div>
-            <svg class="silhouette" viewBox="0 0 100 120" fill="none"><circle cx="50" cy="38" r="26" stroke="#b8874e" stroke-width="2"/><path d="M10 118c4-30 26-46 40-46s36 16 40 46" stroke="#b8874e" stroke-width="2"/></svg>
+            <svg class="silhouette" id="camSilhouette" viewBox="0 0 100 120" fill="none"><circle cx="50" cy="38" r="26" stroke="#b8874e" stroke-width="2"/><path d="M10 118c4-30 26-46 40-46s36 16 40 46" stroke="#b8874e" stroke-width="2"/></svg>
+            <img id="camPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:14px;">
             <div class="flash" id="flash"></div>
           </div>
           <div class="hint" data-i18n="faceHint"></div>
-          <button class="btn btn-brass mt8" id="faceCaptureBtn" onclick="doFaceCapture()"></button>
 
-          <div id="faceMatchArea" style="display:none;">
-            <div class="faceprogress"><div class="bar" id="faceBar"></div></div>
-            <div class="facestatus" id="faceStatus"></div>
-            <div class="stamp" id="faceStamp"><div class="s1" data-i18n="faceStampS1"></div><div class="s2">VERIFIED</div></div>
-          </div>
+          <label class="btn btn-brass mt8" id="faceCaptureBtn">
+            <span id="faceCaptureBtnLabel"></span>
+            <input type="file" accept="image/*" capture="user" style="display:none" onchange="handleFaceCapture(this)">
+          </label>
+
+          <div class="facestatus" id="faceStatus"></div>
+          <div class="locstatus" id="locStatus"></div>
         </div>
 
         <div id="stayConfirmArea" style="display:none;">
@@ -782,15 +781,6 @@ async function submitToHost(){
 // ---- guest cards (name/nationality/address for everyone, phone+email for rep only) ----
 const NAT_CODES = ['JP','VN','CN','KR','TW','US','OTHER'];
 
-// mock postal-code → address dataset, simulating a zip lookup API (e.g. zipcloud)
-const ZIP_MOCK = {
-  '8040067':'福岡県北九州市戸畑区中原西',
-  '8030812':'福岡県北九州市小倉北区京町',
-  '8020001':'福岡県北九州市小倉北区浅野',
-  '1000001':'東京都千代田区千代田',
-  '5300001':'大阪府大阪市北区梅田',
-  '0600001':'北海道札幌市中央区北一条西'
-};
 
 function ageOptionsHTML(){
   let opts = `<option value="">${t('ageSelectPlaceholder')}</option>`;
@@ -891,7 +881,7 @@ function syncAddress(){
   });
 }
 
-function onZipInput(i){
+async function onZipInput(i){
   const zipEl = document.getElementById('zip-'+i);
   const statusEl = document.getElementById('zipstatus-'+i);
   const addrEl = document.getElementById('addr-'+i);
@@ -899,20 +889,30 @@ function onZipInput(i){
   // auto-format as 000-0000
   zipEl.value = digits.length>3 ? digits.slice(0,3)+'-'+digits.slice(3,7) : digits;
   if(digits.length!==7){ statusEl.textContent=''; return; }
-  statusEl.textContent=t('zipSearching');
-  statusEl.style.color='var(--muted)';
-  setTimeout(()=>{
-    const hit = ZIP_MOCK[digits];
+
+  statusEl.textContent = t('zipSearching');
+  statusEl.style.color = 'var(--muted)';
+
+  try{
+    const res = await fetch('https://zipcloud.ibsnet.co.jp/api/search?zipcode=' + digits);
+    const data = await res.json();
+    const hit = data && data.results && data.results[0];
     if(hit){
-      addrEl.value = hit + ' ';
-      statusEl.textContent = t('zipFound', {addr: hit});
-      statusEl.style.color='var(--success)';
+      const full = (hit.address1 || '') + (hit.address2 || '') + (hit.address3 || '');
+      addrEl.value = full + ' ';
+      statusEl.textContent = t('zipFound', {addr: full});
+      statusEl.style.color = 'var(--success)';
     } else {
       statusEl.textContent = t('zipNotFound');
-      statusEl.style.color='var(--danger)';
+      statusEl.style.color = 'var(--danger)';
     }
-    if(i===1) syncAddress();
-  }, 400);
+  } catch(err){
+    console.error(err);
+    statusEl.textContent = t('zipError');
+    statusEl.style.color = 'var(--danger)';
+  }
+
+  if(i===1) syncAddress();
 }
 
 function onNatChange(i){
@@ -925,8 +925,9 @@ function onNatChange(i){
 }
 
 function updateDocRequirement(){
-  const allJp = [...document.querySelectorAll('.g-nat')].every(s=>s.value==='JP');
-  document.getElementById('repIdBlock').style.display = allJp ? 'block' : 'none';
+  const repNat = document.querySelector('#guestCardsWrap .guestcard[data-guest="1"] .g-nat');
+  const repIsJp = !repNat || repNat.value === 'JP';
+  document.getElementById('repIdBlock').style.display = repIsJp ? 'block' : 'none';
 }
 
 function validateForm(){
@@ -972,23 +973,26 @@ function validateForm(){
 
 function validateDocs(){
   const cards = [...document.querySelectorAll('#guestCardsWrap .guestcard')];
-  const foreignCards = cards.filter(c => c.querySelector('.g-nat').value !== 'JP');
   const errors = [];
-  if(foreignCards.length === 0){
+
+  const repCard = cards.find(c => c.dataset.guest === '1');
+  const repIsJp = repCard && repCard.querySelector('.g-nat').value === 'JP';
+  if(repIsJp){
     const repUpload = document.getElementById('repIdUpload');
     if(!repUpload.classList.contains('filled')){
       errors.push(t('errRepDoc'));
     }
-  } else {
-    foreignCards.forEach(c=>{
-      const gnum = c.dataset.guest;
-      const slot = document.getElementById('passportUpload-'+gnum);
-      if(!slot.classList.contains('filled')){
-        const gname = (c.querySelector('.g-name').value || '').trim() || guestLabel(gnum, false);
-        errors.push(t('errPassportDoc', {name: gname}));
-      }
-    });
   }
+
+  cards.filter(c => c.querySelector('.g-nat').value !== 'JP').forEach(c=>{
+    const gnum = c.dataset.guest;
+    const slot = document.getElementById('passportUpload-'+gnum);
+    if(!slot.classList.contains('filled')){
+      const gname = (c.querySelector('.g-name').value || '').trim() || guestLabel(gnum, false);
+      errors.push(t('errPassportDoc', {name: gname}));
+    }
+  });
+
   return errors;
 }
 
@@ -1173,12 +1177,46 @@ function buildDayGuestQueue(){
   dayGuestIndex = 0;
 }
 
+// gnum -> {base64, mimeType} — real arrival-day photos, reviewed by the host later
+let faceCaptures = {};
+
+// captured once per arrival-day session, for MLIT non-face-to-face condition B
+// (the photo must be confirmable as taken at/near the property)
+let arrivalLocation = null;
+let arrivalLocationStatus = 'idle'; // idle | requesting | ok | denied | unsupported
+
+function requestArrivalLocation(){
+  const el = document.getElementById('locStatus');
+  if(!('geolocation' in navigator)){
+    arrivalLocationStatus = 'unsupported';
+    if(el) el.textContent = t('locUnsupported');
+    return;
+  }
+  arrivalLocationStatus = 'requesting';
+  if(el) el.textContent = t('locRequesting');
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      arrivalLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+      arrivalLocationStatus = 'ok';
+      const s = document.getElementById('locStatus');
+      if(s) s.textContent = t('locOk');
+    },
+    ()=>{
+      arrivalLocationStatus = 'denied';
+      const s = document.getElementById('locStatus');
+      if(s) s.textContent = t('locDenied');
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
 function resetStayConfirm(){
   document.getElementById('stayConfirmArea').style.display = 'none';
   document.getElementById('stayConfirmed').style.display = 'none';
   document.getElementById('stayStamp').classList.remove('show');
 
   buildDayGuestQueue();
+  faceCaptures = {};
 
   if(!dayGuestQueue.length){
     document.getElementById('faceAuthSection').style.display = 'none';
@@ -1186,18 +1224,21 @@ function resetStayConfirm(){
   }
 
   document.getElementById('faceAuthSection').style.display = 'block';
+  requestArrivalLocation();
   renderFaceStep();
 }
 
 function renderFaceStep(){
   const total = dayGuestQueue.length;
   const cur = dayGuestQueue[dayGuestIndex];
+
   document.getElementById('faceQueueLabel').textContent = t('faceQueueLabel', {n: dayGuestIndex + 1, total, name: cur.name});
-  document.getElementById('faceMatchArea').style.display = 'none';
-  document.getElementById('faceStamp').classList.remove('show');
-  const btn = document.getElementById('faceCaptureBtn');
-  btn.removeAttribute('disabled');
-  btn.textContent = t('faceCaptureBtn', {name: cur.name});
+  document.getElementById('faceCaptureBtnLabel').textContent = t('faceCaptureBtn', {name: cur.name});
+  document.getElementById('faceCaptureBtn').style.display = 'flex';
+  document.getElementById('faceStatus').textContent = '';
+  document.getElementById('camPreview').style.display = 'none';
+  document.getElementById('camSilhouette').style.display = 'block';
+
   populateReview('dayReviewSummary');
 }
 
@@ -1206,42 +1247,53 @@ function relabelFaceStep(){
   const cur = dayGuestQueue[dayGuestIndex];
   if(!cur) return;
   const total = dayGuestQueue.length;
+
   const label = document.getElementById('faceQueueLabel');
   if(label) label.textContent = t('faceQueueLabel', {n: dayGuestIndex + 1, total, name: cur.name});
-  const btn = document.getElementById('faceCaptureBtn');
-  if(btn && !btn.hasAttribute('disabled')) btn.textContent = t('faceCaptureBtn', {name: cur.name});
+
+  const btnLabel = document.getElementById('faceCaptureBtnLabel');
+  if(btnLabel && document.getElementById('faceCaptureBtn').style.display !== 'none'){
+    btnLabel.textContent = t('faceCaptureBtn', {name: cur.name});
+  }
+
+  const locEl = document.getElementById('locStatus');
+  if(locEl){
+    if(arrivalLocationStatus === 'ok') locEl.textContent = t('locOk');
+    else if(arrivalLocationStatus === 'denied') locEl.textContent = t('locDenied');
+    else if(arrivalLocationStatus === 'requesting') locEl.textContent = t('locRequesting');
+    else if(arrivalLocationStatus === 'unsupported') locEl.textContent = t('locUnsupported');
+  }
+
   populateReview('dayReviewSummary');
 }
 
-function doFaceCapture(){
-  const flash = document.getElementById('flash');
-  flash.style.transition = 'none'; flash.style.opacity = '.9';
-  requestAnimationFrame(()=>{
-    flash.style.transition = 'opacity .4s';
-    flash.style.opacity = '0';
-  });
-  const btn = document.getElementById('faceCaptureBtn');
-  btn.setAttribute('disabled','true');
-  btn.textContent = t('faceCaptureDone');
-  setTimeout(()=>{
-    document.getElementById('faceMatchArea').style.display = 'block';
-    startFaceMatch();
-  }, 400);
-}
-
-function startFaceMatch(){
-  const bar = document.getElementById('faceBar');
-  const status = document.getElementById('faceStatus');
+function handleFaceCapture(inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  if(!file) return;
   const cur = dayGuestQueue[dayGuestIndex];
-  bar.style.transition = 'none'; bar.style.width = '0%';
-  status.textContent = t('faceMatching', {name: cur.name});
-  requestAnimationFrame(()=>{
-    bar.style.transition = 'width 1.4s ease';
-    requestAnimationFrame(()=>{ bar.style.width = '100%'; });
-  });
-  setTimeout(()=>{
-    status.textContent = t('faceMatched', {name: cur.name});
-    document.getElementById('faceStamp').classList.add('show');
+
+  const reader = new FileReader();
+  reader.onload = function(){
+    const result = String(reader.result || '');
+    const comma = result.indexOf(',');
+    const base64 = comma >= 0 ? result.slice(comma + 1) : '';
+    faceCaptures[cur.gnum] = { base64, mimeType: file.type || 'image/jpeg' };
+
+    const flash = document.getElementById('flash');
+    flash.style.transition = 'none'; flash.style.opacity = '.9';
+    requestAnimationFrame(()=>{
+      flash.style.transition = 'opacity .4s';
+      flash.style.opacity = '0';
+    });
+
+    const preview = document.getElementById('camPreview');
+    preview.src = result;
+    preview.style.display = 'block';
+    document.getElementById('camSilhouette').style.display = 'none';
+
+    document.getElementById('faceStatus').textContent = t('faceCaptured', {name: cur.name});
+    document.getElementById('faceCaptureBtn').style.display = 'none';
+
     setTimeout(()=>{
       dayGuestIndex++;
       populateReview('dayReviewSummary');
@@ -1251,8 +1303,13 @@ function startFaceMatch(){
         document.getElementById('faceAuthSection').style.display = 'none';
         document.getElementById('stayConfirmArea').style.display = 'block';
       }
-    }, 700);
-  }, 1600);
+    }, 900);
+  };
+  reader.onerror = function(){
+    alert(t('uploadFailed'));
+  };
+  reader.readAsDataURL(file);
+  inputEl.value = '';
 }
 
 function doStayConfirm(){
@@ -1263,10 +1320,25 @@ function doStayConfirm(){
   });
 
   if(serverGuestData && serverGuestData.reservationId){
+    const guestPhotos = Object.keys(faceCaptures).map(gnum=>{
+      const g = dayGuestQueue.find(x => x.gnum === gnum);
+      return {
+        gnum,
+        name: g ? g.name : '',
+        base64: faceCaptures[gnum].base64,
+        mimeType: faceCaptures[gnum].mimeType
+      };
+    });
+
     fetch(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'checkin', reservationId: serverGuestData.reservationId })
+      body: JSON.stringify({
+        action: 'checkin',
+        reservationId: serverGuestData.reservationId,
+        guestPhotos: guestPhotos,
+        location: arrivalLocation
+      })
     }).catch(err=>console.error(err));
   }
 }
@@ -1314,7 +1386,7 @@ const I18N = {
   repIdTitle: {ja:'代表者の本人確認書類', en:"Representative's ID Document", ko:'대표자 신분증', zhCN:'代表人身份证件', zhTW:'代表人身份證件'},
   repIdUploadTitle: {ja:'運転免許証 / マイナンバーカード / パスポート のいずれか', en:"Driver's License / My Number Card / Passport (any one)", ko:'운전면허증 / 마이넘버카드 / 여권 중 하나', zhCN:'驾照 / 我的号码卡 / 护照（任选其一）', zhTW:'駕照 / 我的號碼卡 / 護照（任選其一）'},
   repIdUploadSub: {ja:'クリックしてアップロード(ダミー) ・ JPEG, PNG, PDF', en:'Click to upload (demo) ・ JPEG, PNG, PDF', ko:'클릭하여 업로드(데모) ・ JPEG, PNG, PDF', zhCN:'点击上传（示例） ・ JPEG, PNG, PDF', zhTW:'點擊上傳（示例） ・ JPEG, PNG, PDF'},
-  repIdHint: {ja:'宿泊者全員が日本国籍のため、代表者お一人分の提示で構いません。', en:"Since all guests hold Japanese nationality, only the representative needs to provide ID.", ko:'숙박자 전원이 일본 국적이므로 대표자 1인의 신분증만 제출하시면 됩니다.', zhCN:'由于所有住宿者均为日本国籍，仅需代表人一人提交证件即可。', zhTW:'由於所有住宿者均為日本國籍，僅需代表人一人提交證件即可。'},
+  repIdHint: {ja:'代表者が日本国籍のため、本人確認書類をアップロードしてください。同行者に外国籍の方がいる場合は、その方の旅券もあわせてアップロードしてください。', en:"Since the representative holds Japanese nationality, please upload their ID. If any companion holds a different nationality, please also upload their passport.", ko:'대표자가 일본 국적이므로 신분증을 업로드해 주세요. 동행자 중 외국 국적이 있는 경우, 해당 여권도 함께 업로드해 주세요.', zhCN:'由于代表人为日本国籍，请上传其身份证件。若同行者中有外国籍人士，请一并上传其护照。', zhTW:'由於代表人為日本國籍，請上傳其身份證件。若同行者中有外國籍人士，請一併上傳其護照。'},
   bannerNoticeLabel: {ja:'ご案内：', en:'Notice: ', ko:'안내: ', zhCN:'提示：', zhTW:'提示：'},
   bannerNoticeText: {ja:'ご入力内容および本人確認書類の確認が取れ次第、玄関の暗証番号をお送りいたします。', en:'Once we have confirmed your information and ID documents, we will send you the entrance door passcode.', ko:'입력하신 내용과 신분증 확인이 완료되는 대로 현관 비밀번호를 보내드립니다.', zhCN:'确认您填写的信息及身份证件后，我们将发送玄关密码给您。', zhTW:'確認您填寫的資訊及身份證件後，我們將發送玄關密碼給您。'},
   btnConfirm: {ja:'内容を確認する', en:'Review My Information', ko:'내용 확인하기', zhCN:'确认填写内容', zhTW:'確認填寫內容'},
@@ -1345,6 +1417,7 @@ const I18N = {
   zipSearching: {ja:'検索中…', en:'Searching…', ko:'검색 중…', zhCN:'搜索中…', zhTW:'搜尋中…'},
   zipFound: {ja:'{addr} が見つかりました。番地以降を入力してください。', en:'Found: {addr}. Please enter the rest of the address.', ko:'{addr}(을)를 찾았습니다. 번지 이하를 입력해 주세요.', zhCN:'已找到：{addr}。请填写门牌号以下的地址。', zhTW:'已找到：{addr}。請填寫門牌號以下的地址。'},
   zipNotFound: {ja:'該当する住所が見つかりませんでした。お手数ですが直接ご入力ください。', en:'No matching address was found. Please enter your address manually.', ko:'일치하는 주소를 찾을 수 없습니다. 직접 입력해 주세요.', zhCN:'未找到匹配的地址，请直接手动填写。', zhTW:'未找到符合的地址，請直接手動填寫。'},
+  zipError: {ja:'住所の検索に失敗しました。お手数ですが直接ご入力ください。', en:'The address lookup failed. Please enter your address manually.', ko:'주소 검색에 실패했습니다. 직접 입력해 주세요.', zhCN:'地址查询失败，请直接手动填写。', zhTW:'地址查詢失敗，請直接手動填寫。'},
 
   errName: {ja:'{label}の氏名が入力されていません。', en:"{label}'s name has not been entered.", ko:'{label}의 성명이 입력되지 않았습니다.', zhCN:'尚未填写{label}的姓名。', zhTW:'尚未填寫{label}的姓名。'},
   errAge: {ja:'{label}の年齢が入力されていません。', en:"{label}'s age has not been selected.", ko:'{label}의 나이가 입력되지 않았습니다.', zhCN:'尚未选择{label}的年龄。', zhTW:'尚未選擇{label}的年齡。'},
@@ -1382,19 +1455,20 @@ const I18N = {
   btnDemoDay: {ja:'チェックイン当日の画面を見る（デモ用） →', en:'View Arrival Day Screen (Demo) →', ko:'체크인 당일 화면 보기(데모) →', zhCN:'查看入住当天画面（示例） →', zhTW:'查看入住當天畫面（示例） →'},
 
   screen4Title: {ja:'チェックイン当日のご確認', en:'Arrival Day Confirmation', ko:'체크인 당일 확인', zhCN:'入住当天确认', zhTW:'入住當天確認'},
-  screen4Sub: {ja:'ご到着後、ご自身のスマートフォンで入力内容にお間違いがないかご確認のうえ、顔認証による本人確認と滞在確認を行ってください。', en:'After you arrive, please use your own smartphone to check your information, complete face verification, and confirm your stay.', ko:'도착 후 본인의 스마트폰으로 입력 내용에 오류가 없는지 확인하시고, 안면 인식 본인 확인과 숙박 확인을 진행해 주세요.', zhCN:'抵达后，请使用您自己的智能手机确认填写内容无误，并完成人脸识别身份验证及入住确认。', zhTW:'抵達後，請使用您自己的智慧型手機確認填寫內容無誤，並完成人臉辨識身份驗證及入住確認。'},
-  screen4Banner: {ja:'内容に相違がある場合はホストまでご連絡ください。相違なければ顔認証にお進みください。', en:'If anything is incorrect, please contact your host. If everything is correct, please proceed to face verification.', ko:'내용에 차이가 있으면 호스트에게 연락해 주세요. 문제가 없으면 안면 인식으로 진행해 주세요.', zhCN:'如内容有误，请联系房东。确认无误后请进行人脸识别。', zhTW:'如內容有誤，請聯繫房東。確認無誤後請進行人臉辨識。'},
-  faceSectionTitle: {ja:'顔認証（宿泊者おひとりずつ）', en:'Face Verification (One Guest at a Time)', ko:'안면 인식（숙박자 개별 진행）', zhCN:'人脸识别（依序进行）', zhTW:'人臉辨識（依序進行）'},
-  faceStatusPending: {ja:'未確認', en:'Not verified', ko:'미확인', zhCN:'待验证', zhTW:'待驗證'},
-  faceStatusCurrent: {ja:'認証中', en:'Verifying', ko:'인증 중', zhCN:'验证中', zhTW:'驗證中'},
-  faceStatusDone: {ja:'確認済み', en:'Verified', ko:'확인 완료', zhCN:'已验证', zhTW:'已驗證'},
-  faceHint: {ja:'ご提出いただいた本人確認書類の顔写真と照合します。ガイド内にお顔が収まるようにしてください。', en:'We will compare this photo with the face photo on your submitted ID document. Please keep your face within the guide.', ko:'제출하신 신분증의 얼굴 사진과 대조합니다. 가이드 안에 얼굴이 들어오도록 해 주세요.', zhCN:'将与您提交的证件照片进行人脸比对，请将脸部对准取景框。', zhTW:'將與您提交的證件照片進行人臉比對，請將臉部對準取景框。'},
+  screen4Sub: {ja:'ご到着後、ご自身のスマートフォンで入力内容にお間違いがないかご確認のうえ、本人確認用のお写真の撮影と滞在確認を行ってください。', en:'After you arrive, please use your own smartphone to check your information, take a quick ID photo, and confirm your stay.', ko:'도착 후 본인의 스마트폰으로 입력 내용에 오류가 없는지 확인하시고, 본인 확인용 사진 촬영과 숙박 확인을 진행해 주세요.', zhCN:'抵达后，请使用您自己的智能手机确认填写内容无误，并完成身份确认拍照及入住确认。', zhTW:'抵達後，請使用您自己的智慧型手機確認填寫內容無誤，並完成身份確認拍照及入住確認。'},
+  screen4Banner: {ja:'内容に相違がある場合はホストまでご連絡ください。相違なければ、本人確認用の撮影にお進みください。', en:'If anything is incorrect, please contact your host. If everything is correct, please proceed to the ID photo.', ko:'내용에 차이가 있으면 호스트에게 연락해 주세요. 문제가 없으면 본인 확인용 촬영으로 진행해 주세요.', zhCN:'如内容有误，请联系房东。确认无误后请进行身份确认拍照。', zhTW:'如內容有誤，請聯繫房東。確認無誤後請進行身份確認拍照。'},
+  faceSectionTitle: {ja:'本人確認用の撮影（宿泊者おひとりずつ）', en:'ID Photo Capture (One Guest at a Time)', ko:'본인 확인용 촬영（숙박자 개별 진행）', zhCN:'身份确认拍摄（依序进行）', zhTW:'身份確認拍攝（依序進行）'},
+  faceStatusPending: {ja:'未撮影', en:'Not photographed', ko:'미촬영', zhCN:'待拍摄', zhTW:'待拍攝'},
+  faceStatusCurrent: {ja:'撮影中', en:'Capturing', ko:'촬영 중', zhCN:'拍摄中', zhTW:'拍攝中'},
+  faceStatusDone: {ja:'撮影済み', en:'Photo captured', ko:'촬영 완료', zhCN:'已拍摄', zhTW:'已拍攝'},
+  faceHint: {ja:'ご到着時のお顔を撮影して記録します。自動判定は行わず、後ほどホストが提出書類と照らし合わせて確認いたします。ガイド内にお顔が収まるようにしてください。', en:"We'll take a photo of your face on arrival for the record. There's no automatic matching — your host will compare it with your submitted ID afterward. Please keep your face within the guide.", ko:'도착 시 얼굴 사진을 촬영하여 기록합니다. 자동 판정은 하지 않으며, 이후 호스트가 제출하신 신분증과 대조하여 확인합니다. 가이드 안에 얼굴이 들어오도록 해 주세요.', zhCN:'将拍摄您到达时的照片作为记录，不进行自动比对，之后由房东与您提交的证件核对确认。请将脸部对准取景框。', zhTW:'將拍攝您抵達時的照片作為記錄，不進行自動比對，之後由房東與您提交的證件核對確認。請將臉部對準取景框。'},
   faceQueueLabel: {ja:'{n} / {total}人目：{name}様', en:'{n} of {total}: {name}', ko:'{n} / {total}번째: {name}님', zhCN:'第 {n} / {total} 位：{name}', zhTW:'第 {n} / {total} 位：{name}'},
   faceCaptureBtn: {ja:'{name}様を撮影する', en:'Take Photo of {name}', ko:'{name}님 촬영하기', zhCN:'为{name}拍照', zhTW:'為{name}拍照'},
-  faceCaptureDone: {ja:'撮影完了', en:'Photo Taken', ko:'촬영 완료', zhCN:'拍摄完成', zhTW:'拍攝完成'},
-  faceMatching: {ja:'{name}様の提出書類の写真と照合中…', en:"Comparing with {name}'s submitted document photo…", ko:'{name}님의 제출 서류 사진과 대조 중…', zhCN:'正在与{name}提交的证件照片比对中…', zhTW:'正在與{name}提交的證件照片比對中…'},
-  faceMatched: {ja:'一致率 98.2% ・ {name}様の本人確認が完了しました', en:'Match 98.2% ・ Identity verified for {name}', ko:'일치율 98.2% ・ {name}님의 본인 확인이 완료되었습니다', zhCN:'匹配率 98.2% ・ {name}的身份验证已完成', zhTW:'匹配率 98.2% ・ {name}的身份驗證已完成'},
-  faceStampS1: {ja:'確認', en:'Verified', ko:'확인', zhCN:'确认', zhTW:'確認'},
+  faceCaptured: {ja:'{name}様の撮影が完了しました', en:"Photo captured for {name}", ko:'{name}님 촬영이 완료되었습니다', zhCN:'{name}的照片已拍摄完成', zhTW:'{name}的照片已拍攝完成'},
+  locRequesting: {ja:'位置情報を取得しています…', en:'Getting your location…', ko:'위치 정보를 가져오는 중…', zhCN:'正在获取位置信息…', zhTW:'正在取得位置資訊…'},
+  locOk: {ja:'位置情報を記録しました', en:'Location recorded', ko:'위치 정보가 기록되었습니다', zhCN:'已记录位置信息', zhTW:'已記錄位置資訊'},
+  locDenied: {ja:'位置情報を取得できませんでした（ホストが後ほど確認します）', en:"Couldn't get your location (your host will follow up)", ko:'위치 정보를 가져올 수 없었습니다（호스트가 추후 확인합니다）', zhCN:'无法获取位置信息（房东将稍后确认）', zhTW:'無法取得位置資訊（房東將稍後確認）'},
+  locUnsupported: {ja:'このブラウザでは位置情報が取得できません', en:"This browser doesn't support location", ko:'이 브라우저에서는 위치 정보를 가져올 수 없습니다', zhCN:'此浏览器不支持获取位置信息', zhTW:'此瀏覽器不支援取得位置資訊'},
   btnStayConfirm: {ja:'この内容で滞在を確認する', en:'Confirm My Stay', ko:'이 내용으로 숙박 확인', zhCN:'确认入住信息', zhTW:'確認入住資訊'},
   stayStampS1: {ja:'確認', en:'Confirmed', ko:'확인', zhCN:'确认', zhTW:'確認'},
   labelRoom: {ja:'お部屋番号', en:'Room Number', ko:'객실 번호', zhCN:'房间号', zhTW:'房間號'},
