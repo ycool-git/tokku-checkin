@@ -646,7 +646,7 @@
           <div class="section-head"><span class="tag">STEP 4-A</span><h3 data-i18n="locPermTitle"></h3></div>
           <div class="hint locpermhint" data-i18n="locPermExplain"></div>
 
-          <button type="button" class="btn btn-brass mt8" id="locAllowBtn" onclick="requestArrivalLocation()" data-i18n="btnAllowLocation"></button>
+          <button type="button" class="btn btn-brass mt8" id="locAllowBtn" onclick="allowLocationClick()" data-i18n="btnAllowLocation"></button>
 
           <div class="locstatus" id="locStatus"></div>
 
@@ -1435,10 +1435,31 @@ function requestArrivalLocation(){
       resolve(false);
       return;
     }
+
     arrivalLocationStatus = 'requesting';
     if(el) el.textContent = t('locRequesting');
+
+    // Some browsers, once permission has been fully blocked, never invoke
+    // either callback at all (rather than firing an error) — enforce our own
+    // timeout so the UI always responds instead of hanging indefinitely.
+    let settled = false;
+    const finishDenied = ()=>{
+      if(settled) return;
+      settled = true;
+      arrivalLocationStatus = 'denied';
+      const s = document.getElementById('locStatus');
+      if(s) s.textContent = '';
+      showLocError('locDeniedBannerText');
+      updateLocPermUI();
+      resolve(false);
+    };
+    const safetyTimer = setTimeout(finishDenied, 6000);
+
     navigator.geolocation.getCurrentPosition(
       pos=>{
+        if(settled) return;
+        settled = true;
+        clearTimeout(safetyTimer);
         arrivalLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
         arrivalLocationStatus = 'ok';
         const s = document.getElementById('locStatus');
@@ -1448,14 +1469,10 @@ function requestArrivalLocation(){
         resolve(true);
       },
       ()=>{
-        arrivalLocationStatus = 'denied';
-        const s = document.getElementById('locStatus');
-        if(s) s.textContent = '';
-        showLocError('locDeniedBannerText');
-        updateLocPermUI();
-        resolve(false);
+        clearTimeout(safetyTimer);
+        finishDenied();
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   });
 }
@@ -1470,6 +1487,16 @@ async function retryLocation(){
   if(btn){ btn.disabled = true; btn.textContent = t('locRetrying'); }
   await requestArrivalLocation();
   if(btn){ btn.disabled = false; btn.textContent = t('btnRetryLocation'); }
+}
+
+async function allowLocationClick(){
+  const btn = document.getElementById('locAllowBtn');
+  if(btn){ btn.disabled = true; btn.textContent = t('locRetrying'); }
+  await requestArrivalLocation();
+  if(btn && arrivalLocationStatus !== 'ok'){
+    btn.disabled = false;
+    btn.textContent = t('btnAllowLocation');
+  }
 }
 
 function resetStayConfirm(){
