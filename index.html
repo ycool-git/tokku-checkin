@@ -552,8 +552,8 @@
 
       <!-- ============ SCREEN 1 : 事前確認フォーム ============ -->
       <div class="screen active" id="screen1">
-        <h2 class="scr-title" data-i18n="screen1Title"></h2>
-        <p class="scr-sub" data-i18n="screen1Sub"></p>
+        <h2 class="scr-title" id="screen1Title"></h2>
+        <p class="scr-sub" id="screen1Sub"></p>
 
         <div class="section">
           <div class="section-head"><span class="tag">STEP 1-A</span><h3 data-i18n="stepATitle"></h3></div>
@@ -724,6 +724,7 @@ function goStep(n){
     s.classList.toggle('active', sn===n);
     s.classList.toggle('done', sn<n);
   });
+  if(n===1){ updateScreen1Header(); }
   if(n===2){ populateReview('reviewSummary'); updateSendButton(); }
   if(n===4){ resetStayConfirm(); editingFromDay4 = false; }
 }
@@ -733,14 +734,119 @@ document.querySelectorAll('.step').forEach(s=>{
 
 function goEditInfo(){
   editingFromDay4 = true;
+  if(ARRIVAL_MODE && serverGuestData){
+    prefillFormFromServerData();
+  }
   goStep(1);
+}
+
+function prefillFormFromServerData(){
+  if(!serverGuestData) return;
+  const guests = serverGuestData.guests || [];
+  const n = Math.max(1, guests.length);
+
+  document.getElementById('checkinDate').value = serverGuestData.checkinDate || '';
+  document.getElementById('checkoutDate').value = serverGuestData.checkoutDate || '';
+  document.getElementById('guestCount').value = n;
+  renderGuestCards();
+
+  const repAddr = guests[0] ? (guests[0].address || '') : '';
+
+  guests.forEach((g, idx)=>{
+    const gnum = String(idx + 1);
+    const card = document.querySelector(`#guestCardsWrap .guestcard[data-guest="${gnum}"]`);
+    if(!card) return;
+
+    card.querySelector('.g-name').value = g.name || '';
+    const ageSel = card.querySelector('.g-age');
+    if(ageSel) ageSel.value = g.age || '';
+    const natSel = card.querySelector('.g-nat');
+    if(natSel){ natSel.value = g.nationality || 'JP'; onNatChange(gnum); }
+    const passEl = card.querySelector('.g-passno');
+    if(passEl) passEl.value = g.passportNo || '';
+
+    if(gnum === '1'){
+      document.getElementById('addr-1').value = g.address || '';
+      document.getElementById('repPhone').value = serverGuestData.repPhone || '';
+      document.getElementById('repEmail').value = serverGuestData.repEmail || '';
+    } else {
+      const sameBox = card.querySelector('.g-same');
+      const sameAsRep = !!g.address && g.address === repAddr;
+      if(sameBox){
+        sameBox.checked = sameAsRep;
+        toggleSameAddr(gnum);
+      }
+      if(!sameAsRep){
+        const ownAddr = document.getElementById('addr-'+gnum);
+        if(ownAddr) ownAddr.value = g.address || '';
+      }
+    }
+
+    // mark the existing document as already submitted — no re-upload required
+    // unless the guest chooses to replace it
+    const slotId = gnum === '1' ? 'repIdUpload' : ('passportUpload-'+gnum);
+    const slot = document.getElementById(slotId);
+    if(slot && g.docUrl){
+      slot.classList.add('filled');
+      slot.dataset.preexisting = '1';
+      const icon = slot.querySelector('.icon');
+      if(icon) icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+  });
+
+  syncAddress();
+  updateDocRequirement();
+  refreshUploadTexts();
+}
+
+// carry edits made on STEP01 back into the in-memory reservation data used by
+// STEP04, so the day-of screen reflects the change immediately.
+// Note: this updates what's shown on this device only — it does not yet
+// re-save the edit to the spreadsheet.
+function syncServerDataFromForm(){
+  if(!serverGuestData) return;
+  const guests = collectGuestsFromDOM();
+  const rep = guests.find(g => g.isRep) || guests[0];
+
+  serverGuestData.checkinDate = document.getElementById('checkinDate').value || serverGuestData.checkinDate;
+  serverGuestData.checkoutDate = document.getElementById('checkoutDate').value || serverGuestData.checkoutDate;
+  if(rep){
+    serverGuestData.repName = rep.name;
+    serverGuestData.repPhone = rep.phone;
+    serverGuestData.repEmail = rep.email;
+  }
+
+  const prevGuests = serverGuestData.guests || [];
+  serverGuestData.guests = guests.map(g=>{
+    const prev = prevGuests[parseInt(g.gnum, 10) - 1] || {};
+    return {
+      name: g.name,
+      age: g.age,
+      nationality: g.nat,
+      address: g.addr,
+      passportNo: g.passportNo,
+      docUrl: prev.docUrl || ''
+    };
+  });
+}
+
+function updateScreen1Header(){
+  const titleEl = document.getElementById('screen1Title');
+  const subEl = document.getElementById('screen1Sub');
+  if(editingFromDay4){
+    if(titleEl) titleEl.textContent = t('screen1EditTitle');
+    if(subEl) subEl.textContent = t('screen1EditSub');
+  } else {
+    if(titleEl) titleEl.textContent = t('screen1Title');
+    if(subEl) subEl.textContent = t('screen1Sub');
+  }
 }
 
 function updateSendButton(){
   const btn = document.getElementById('sendOrReturnBtn');
   const bannerEl = document.getElementById('reviewBannerText');
   if(editingFromDay4){
-    if(btn){ btn.textContent = t('btnReturnDay4'); btn.onclick = ()=>goStep(4); }
+    if(btn){ btn.textContent = t('btnReturnDay4'); btn.onclick = ()=>{ syncServerDataFromForm(); goStep(4); }; }
     if(bannerEl) bannerEl.textContent = t('reviewBannerEdit');
   } else {
     if(btn){ btn.textContent = t('btnSendHost'); btn.onclick = ()=>submitToHost(); }
@@ -1158,6 +1264,7 @@ function handleFileUpload(inputEl, slotId){
     if(!slot) return;
     slot.classList.add('filled');
     slot.dataset.filename = file.name;
+    delete slot.dataset.preexisting;
     slot.querySelector('.icon').innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     refreshUploadTexts();
   };
@@ -1417,6 +1524,8 @@ const I18N = {
 
   screen1Title: {ja:'滞在前 本人確認フォーム', en:'Pre-Arrival ID Verification Form', ko:'숙박 전 본인 확인 양식', zhCN:'入住前身份确认表', zhTW:'入住前身份確認表'},
   screen1Sub: {ja:'チェックイン日の3日前までにご入力ください。ご入力内容は宿泊者名簿として法令に基づき保管されます。', en:'Please complete this at least 3 days before check-in. Your information will be kept on file as required by law.', ko:'체크인 3일 전까지 입력해 주세요. 입력하신 내용은 법령에 따라 숙박자 명부로 보관됩니다.', zhCN:'请在入住日3天前完成填写。您填写的信息将依法作为住宿者名册留存。', zhTW:'請於入住日3天前完成填寫。您填寫的資訊將依法作為住宿者名冊留存。'},
+  screen1EditTitle: {ja:'入力内容の修正', en:'Edit Your Information', ko:'입력 내용 수정', zhCN:'修改填写内容', zhTW:'修改填寫內容'},
+  screen1EditSub: {ja:'内容を修正し、「内容を確認する」を押すと当日確認画面に戻れます。', en:'Make your changes, then tap "Review My Information" to return to the arrival-day screen.', ko:'내용을 수정한 후 「내용 확인하기」를 누르면 당일 확인 화면으로 돌아갑니다.', zhCN:'修改内容后，点击「确认填写内容」即可返回入住当天确认画面。', zhTW:'修改內容後，點擊「確認填寫內容」即可返回入住當天確認畫面。'},
   stepATitle: {ja:'宿泊人数', en:'Number of Guests', ko:'숙박 인원', zhCN:'入住人数', zhTW:'入住人數'},
   labelCheckinDate: {ja:'チェックイン予定日', en:'Check-in Date', ko:'체크인 예정일', zhCN:'预计入住日期', zhTW:'預計入住日期'},
   labelCheckoutDate: {ja:'チェックアウト予定日', en:'Check-out Date', ko:'체크아웃 예정일', zhCN:'预计退房日期', zhTW:'預計退房日期'},
@@ -1471,6 +1580,7 @@ const I18N = {
   errRepDoc: {ja:'代表者の本人確認書類がアップロードされていません。', en:"The representative's ID document has not been uploaded.", ko:'대표자의 신분증이 업로드되지 않았습니다.', zhCN:'尚未上传代表人的身份证件。', zhTW:'尚未上傳代表人的身份證件。'},
   errPassportDoc: {ja:'{name} のパスポート画像がアップロードされていません。', en:"{name}'s passport photo has not been uploaded.", ko:'{name}님의 여권 사진이 업로드되지 않았습니다.', zhCN:'尚未上传{name}的护照照片。', zhTW:'尚未上傳{name}的護照照片。'},
   uploadedStatus: {ja:'アップロード済み', en:'Uploaded', ko:'업로드 완료', zhCN:'已上传', zhTW:'已上傳'},
+  uploadedPreviously: {ja:'提出済み（変更する場合はタップして再アップロード）', en:'Already submitted (tap to re-upload if you need to change it)', ko:'제출 완료（변경하려면 탭하여 다시 업로드）', zhCN:'已提交（如需更改请点击重新上传）', zhTW:'已提交（如需更改請點擊重新上傳）'},
   uploadFailed: {ja:'ファイルの読み込みに失敗しました。もう一度お試しください。', en:'Failed to read the file. Please try again.', ko:'파일을 읽는 데 실패했습니다. 다시 시도해 주세요.', zhCN:'文件读取失败，请重试。', zhTW:'檔案讀取失敗，請重試。'},
   sending: {ja:'送信中…', en:'Sending…', ko:'전송 중…', zhCN:'发送中…', zhTW:'發送中…'},
   sendFailed: {ja:'送信に失敗しました。通信環境をご確認のうえ、もう一度お試しください。', en:'Sending failed. Please check your connection and try again.', ko:'전송에 실패했습니다. 네트워크 상태를 확인한 후 다시 시도해 주세요.', zhCN:'发送失败，请检查网络后重试。', zhTW:'發送失敗，請檢查網路後重試。'},
@@ -1552,7 +1662,13 @@ function refreshUploadTexts(){
     const sEl = slot.querySelector('.meta .s');
     if(!sEl) return;
     if(slot.classList.contains('filled')){
-      sEl.textContent = t('uploadedStatus') + (slot.dataset.filename ? '：' + slot.dataset.filename : '');
+      if(slot.dataset.filename){
+        sEl.textContent = t('uploadedStatus') + '：' + slot.dataset.filename;
+      } else if(slot.dataset.preexisting){
+        sEl.textContent = t('uploadedPreviously');
+      } else {
+        sEl.textContent = t('uploadedStatus');
+      }
     } else if(slot.dataset.subKey){
       sEl.textContent = t(slot.dataset.subKey);
     }
@@ -1599,6 +1715,7 @@ function setLang(lang){
   const activeScreen = document.querySelector('.screen.active');
   if(activeScreen){
     const n = parseInt(activeScreen.id.replace('screen',''));
+    if(n === 1){ updateScreen1Header(); }
     if(n === 2){ populateReview('reviewSummary'); updateSendButton(); }
     if(n === 4 && !day4NoReservation){ relabelFaceStep(); populateReview('dayReviewSummary'); }
     if(n === 4 && day4NoReservation){
@@ -1687,6 +1804,7 @@ function showLangGate(){
 document.addEventListener('DOMContentLoaded', ()=>{
   applyI18n();
   renderGuestCards();
+  updateScreen1Header();
   const switchBtn = document.getElementById('langSwitchBtn');
   if(switchBtn) switchBtn.textContent = LANG_NATIVE_NAME[LANG] || LANG_NATIVE_NAME.ja;
 
