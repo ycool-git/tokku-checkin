@@ -402,7 +402,7 @@
 
   /* ---------- Face auth status stamp (embedded in guest card) ---------- */
   .facethumb{
-    width:36px;height:36px;border-radius:9px;
+    width:64px;height:64px;border-radius:11px;
     object-fit:cover;
     border:1.5px solid var(--line);
     flex-shrink:0;
@@ -587,7 +587,7 @@
           <div class="hint" data-i18n="repIdHint"></div>
         </div>
 
-        <div class="banner"><span>🛈</span><div><b data-i18n="bannerNoticeLabel"></b><span data-i18n="bannerNoticeText"></span></div></div>
+        <div class="banner" id="step1NoticeBanner"><span>🛈</span><div><b data-i18n="bannerNoticeLabel"></b><span data-i18n="bannerNoticeText"></span></div></div>
 
         <div class="banner banner-error" id="formError" style="display:none;"></div>
 
@@ -640,8 +640,6 @@
           <div class="section-head"><span class="tag" data-i18n="sectionConfirmTag"></span><h3 data-i18n="sectionGuestInfoTitle"></h3></div>
           <div id="dayReviewSummary"></div>
         </div>
-
-        <div class="banner"><span>🛈</span><div data-i18n="screen4Banner"></div></div>
 
         <div class="section" id="faceAuthSection">
           <div class="section-head"><span class="tag">STEP 4-A</span><h3 data-i18n="faceSectionTitle"></h3></div>
@@ -833,12 +831,15 @@ function syncServerDataFromForm(){
 function updateScreen1Header(){
   const titleEl = document.getElementById('screen1Title');
   const subEl = document.getElementById('screen1Sub');
+  const noticeEl = document.getElementById('step1NoticeBanner');
   if(editingFromDay4){
     if(titleEl) titleEl.textContent = t('screen1EditTitle');
     if(subEl) subEl.textContent = t('screen1EditSub');
+    if(noticeEl) noticeEl.style.display = 'none';
   } else {
     if(titleEl) titleEl.textContent = t('screen1Title');
     if(subEl) subEl.textContent = t('screen1Sub');
+    if(noticeEl) noticeEl.style.display = 'flex';
   }
 }
 
@@ -846,12 +847,26 @@ function updateSendButton(){
   const btn = document.getElementById('sendOrReturnBtn');
   const bannerEl = document.getElementById('reviewBannerText');
   if(editingFromDay4){
-    if(btn){ btn.textContent = t('btnReturnDay4'); btn.onclick = ()=>{ syncServerDataFromForm(); goStep(4); }; }
+    if(btn){ btn.textContent = t('btnReturnDay4'); btn.onclick = ()=>submitUpdateToHost(); }
     if(bannerEl) bannerEl.textContent = t('reviewBannerEdit');
   } else {
     if(btn){ btn.textContent = t('btnSendHost'); btn.onclick = ()=>submitToHost(); }
     if(bannerEl) bannerEl.textContent = t('reviewBanner');
   }
+}
+
+function buildGuestsPayload(){
+  const guests = collectGuestsFromDOM();
+  return guests.map(g=>{
+    const fileKey = g.isRep ? 'repIdUpload' : ('passportUpload-' + g.gnum);
+    const file = uploadedFiles[fileKey];
+    return {
+      name: g.name, age: g.age, nationality: g.nat, address: g.addr,
+      passportNo: g.passportNo,
+      docBase64: file ? file.base64 : '',
+      docMimeType: file ? file.mimeType : ''
+    };
+  });
 }
 
 function buildSubmitPayload(){
@@ -865,16 +880,23 @@ function buildSubmitPayload(){
     repPhone: rep.phone || '',
     repEmail: rep.email || '',
     repAddress: rep.addr || '',
-    guests: guests.map(g=>{
-      const fileKey = g.isRep ? 'repIdUpload' : ('passportUpload-' + g.gnum);
-      const file = uploadedFiles[fileKey];
-      return {
-        name: g.name, age: g.age, nationality: g.nat, address: g.addr,
-        passportNo: g.passportNo,
-        docBase64: file ? file.base64 : '',
-        docMimeType: file ? file.mimeType : ''
-      };
-    })
+    guests: buildGuestsPayload()
+  };
+}
+
+function buildUpdatePayload(){
+  const guests = collectGuestsFromDOM();
+  const rep = guests.find(g=>g.isRep) || guests[0] || {};
+  return {
+    action: 'update',
+    reservationId: serverGuestData ? serverGuestData.reservationId : '',
+    checkinDate: document.getElementById('checkinDate').value || '',
+    checkoutDate: document.getElementById('checkoutDate').value || '',
+    repName: rep.name || '',
+    repPhone: rep.phone || '',
+    repEmail: rep.email || '',
+    repAddress: rep.addr || '',
+    guests: buildGuestsPayload()
   };
 }
 
@@ -893,6 +915,38 @@ async function submitToHost(){
     const data = await res.json();
     if(!data.success) throw new Error(data.error || 'submit failed');
     goStep(3);
+  } catch(err){
+    console.error(err);
+    if(errEl){ errEl.innerHTML = '<span>⚠</span><div>' + t('sendFailed') + '</div>'; errEl.style.display = 'flex'; }
+  } finally {
+    if(btn){ btn.disabled = false; }
+    updateSendButton();
+  }
+}
+
+async function submitUpdateToHost(){
+  const btn = document.getElementById('sendOrReturnBtn');
+  const errEl = document.getElementById('sendErrorBanner');
+  if(errEl) errEl.style.display = 'none';
+  if(btn){ btn.disabled = true; btn.textContent = t('sending'); }
+
+  try{
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(buildUpdatePayload())
+    });
+    const data = await res.json();
+    if(!data.success) throw new Error(data.error || 'update failed');
+
+    // reflect the saved result locally (docUrl values come back from the backend)
+    if(serverGuestData){
+      if(Array.isArray(data.guests)) serverGuestData.guests = data.guests;
+      else syncServerDataFromForm();
+      serverGuestData.checkinDate = document.getElementById('checkinDate').value || serverGuestData.checkinDate;
+      serverGuestData.checkoutDate = document.getElementById('checkoutDate').value || serverGuestData.checkoutDate;
+    }
+    goStep(4);
   } catch(err){
     console.error(err);
     if(errEl){ errEl.innerHTML = '<span>⚠</span><div>' + t('sendFailed') + '</div>'; errEl.style.display = 'flex'; }
