@@ -431,7 +431,9 @@
     font-size:13px;
     font-weight:800;
     padding:4px 14px;
+    cursor:pointer;
   }
+  button.gstamp{ -webkit-appearance:none; appearance:none; }
 
   .facequeue{
     font-size:12.5px;font-weight:800;color:var(--brass-dark);
@@ -657,6 +659,8 @@
             <span id="faceCaptureBtnLabel"></span>
             <input type="file" accept="image/*" capture="user" style="display:none" onchange="handleFaceCapture(this)">
           </label>
+
+          <button class="btn btn-ghost mt8" id="faceBackBtn" onclick="cancelFaceStep()" data-i18n="btnBackToList" style="display:none;"></button>
 
           <div class="btnrow" id="faceConfirmArea" style="display:none;">
             <button class="btn btn-ghost" onclick="retakeFace()" data-i18n="btnRetake"></button>
@@ -1346,6 +1350,9 @@ function faceStampHTML(gnum){
   const status = faceStatusFor(gnum);
   if(!status) return '';
   const key = status === 'done' ? 'faceStatusDone' : status === 'current' ? 'faceStatusCurrent' : 'faceStatusPending';
+  if(status === 'done'){
+    return `<button type="button" class="gstamp gstamp-done" onclick="jumpToGuestCapture('${gnum}')">${t(key)}</button>`;
+  }
   return `<span class="gstamp gstamp-${status}">${t(key)}</span>`;
 }
 
@@ -1445,6 +1452,11 @@ function renderFaceStep(){
   document.getElementById('camPreview').style.display = 'none';
   document.getElementById('camSilhouette').style.display = 'block';
 
+  // "back to list" is only meaningful once at least one guest already has a
+  // photo to go back to (otherwise there's nothing to return to)
+  const backBtn = document.getElementById('faceBackBtn');
+  if(backBtn) backBtn.style.display = dayGuestQueue.some(g => faceCaptures[g.gnum]) ? 'block' : 'none';
+
   populateReview('dayReviewSummary');
 }
 
@@ -1461,6 +1473,9 @@ function relabelFaceStep(){
   if(btnLabel && document.getElementById('faceCaptureBtn').style.display !== 'none'){
     btnLabel.textContent = t('faceCaptureBtn', {name: cur.name});
   }
+
+  const backBtn = document.getElementById('faceBackBtn');
+  if(backBtn) backBtn.textContent = t('btnBackToList');
 
   const locEl = document.getElementById('locStatus');
   if(locEl){
@@ -1523,16 +1538,44 @@ function retakeFace(){
   populateReview('dayReviewSummary');
 }
 
-function confirmFaceCapture(){
-  document.getElementById('faceConfirmArea').style.display = 'none';
-  dayGuestIndex++;
-  populateReview('dayReviewSummary');
-  if(dayGuestIndex < dayGuestQueue.length){
-    renderFaceStep();
-  } else {
+// moves to the next guest who doesn't have a photo yet, or shows the stay
+// confirm button if everyone already has one. Used both for the normal
+// forward flow and after jumping back to retake an earlier guest.
+function advanceToNextIncomplete(){
+  const nextIdx = dayGuestQueue.findIndex(g => !faceCaptures[g.gnum]);
+  if(nextIdx === -1){
+    dayGuestIndex = dayGuestQueue.length;
     document.getElementById('faceAuthSection').style.display = 'none';
     document.getElementById('stayConfirmArea').style.display = 'block';
+  } else {
+    dayGuestIndex = nextIdx;
+    renderFaceStep();
   }
+}
+
+function confirmFaceCapture(){
+  document.getElementById('faceConfirmArea').style.display = 'none';
+  populateReview('dayReviewSummary');
+  advanceToNextIncomplete();
+}
+
+// lets the guest tap an already-photographed person in the list to retake
+// their photo out of order, without losing anyone else's progress
+function jumpToGuestCapture(gnum){
+  const idx = dayGuestQueue.findIndex(g => g.gnum === gnum);
+  if(idx === -1) return;
+  dayGuestIndex = idx;
+  document.getElementById('stayConfirmArea').style.display = 'none';
+  document.getElementById('faceAuthSection').style.display = 'block';
+  renderFaceStep();
+  document.getElementById('faceAuthSection').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// backs out of the current capture step (e.g. after jumping to retake someone)
+// without requiring a new photo — resumes wherever is still incomplete
+function cancelFaceStep(){
+  document.getElementById('faceConfirmArea').style.display = 'none';
+  advanceToNextIncomplete();
 }
 
 function doStayConfirm(){
@@ -1696,6 +1739,7 @@ const I18N = {
   locDenied: {ja:'位置情報を取得できませんでした（ホストが後ほど確認します）', en:"Couldn't get your location (your host will follow up)", ko:'위치 정보를 가져올 수 없었습니다（호스트가 추후 확인합니다）', zhCN:'无法获取位置信息（房东将稍后确认）', zhTW:'無法取得位置資訊（房東將稍後確認）'},
   locUnsupported: {ja:'このブラウザでは位置情報が取得できません', en:"This browser doesn't support location", ko:'이 브라우저에서는 위치 정보를 가져올 수 없습니다', zhCN:'此浏览器不支持获取位置信息', zhTW:'此瀏覽器不支援取得位置資訊'},
   btnRetake: {ja:'撮り直す', en:'Retake Photo', ko:'다시 촬영', zhCN:'重新拍摄', zhTW:'重新拍攝'},
+  btnBackToList: {ja:'一覧に戻る', en:'Back to List', ko:'목록으로 돌아가기', zhCN:'返回列表', zhTW:'返回列表'},
   btnUsePhoto: {ja:'この写真で進む', en:'Use This Photo', ko:'이 사진으로 진행', zhCN:'使用此照片', zhTW:'使用此照片'},
   alreadyCheckedInStampS1: {ja:'手続き済み', en:'Completed', ko:'완료', zhCN:'已完成', zhTW:'已完成'},
   alreadyCheckedInText: {ja:'チェックインの手続きはすでに完了しています。本人確認は、ホストが後ほど提出書類と照らし合わせて確認いたします。追加の操作は必要ありません。', en:'Your check-in has already been completed. Your host will review your ID against your submitted documents afterward — no further action is needed.', ko:'체크인 절차는 이미 완료되었습니다. 본인 확인은 호스트가 이후 제출하신 서류와 대조하여 확인합니다. 추가 조작은 필요하지 않습니다.', zhCN:'入住手续已经完成。身份确认将由房东稍后与您提交的证件核对确认，无需进行其他操作。', zhTW:'入住手續已經完成。身份確認將由房東稍後與您提交的證件核對確認，無需進行其他操作。'},
