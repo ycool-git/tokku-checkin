@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>特区民泊 チェックインシステム | 画面イメージ</title>
+<title>特区民泊 チェックインシステム</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -629,8 +629,6 @@
           <p class="scr-sub" style="margin-bottom:14px;" data-i18n="guideSub"></p>
           <a class="btn btn-brass" href="house-guide.html" target="_blank" rel="noopener" style="text-decoration:none;" data-i18n="btnGuide"></a>
         </div>
-
-        <button class="btn btn-ghost mt8" onclick="goStep(4)" data-i18n="btnDemoDay"></button>
       </div>
 
       <!-- ============ SCREEN 4 : チェックイン当日（ゲストのスマホで） ============ -->
@@ -660,8 +658,6 @@
             <input type="file" accept="image/*" capture="user" style="display:none" onchange="handleFaceCapture(this)">
           </label>
 
-          <button class="btn btn-ghost mt8" id="faceBackBtn" onclick="cancelFaceStep()" data-i18n="btnBackToList" style="display:none;"></button>
-
           <div class="btnrow" id="faceConfirmArea" style="display:none;">
             <button class="btn btn-ghost" onclick="retakeFace()" data-i18n="btnRetake"></button>
             <button class="btn btn-primary" onclick="confirmFaceCapture()" data-i18n="btnUsePhoto"></button>
@@ -669,6 +665,14 @@
 
           <div class="facestatus" id="faceStatus"></div>
           <div class="locstatus" id="locStatus"></div>
+
+          <div class="banner banner-error" id="locErrorBanner" style="display:none;">
+            <span>⚠</span>
+            <div>
+              <div id="locErrorText"></div>
+              <button type="button" class="btn btn-ghost mt8" onclick="requestArrivalLocation()" data-i18n="btnRetryLocation"></button>
+            </div>
+          </div>
         </div>
 
         <div id="alreadyCheckedInArea" style="display:none;">
@@ -702,8 +706,6 @@
   </div>
 
 </div>
-
-<footer class="note" data-i18n="footerNote"></footer>
 
 <script>
 // Google Apps Script web app URL (backend: Sheets + Drive). See Code.gs.
@@ -1303,6 +1305,7 @@ function populateReview(targetId){
     return `<div class="guestcard">
       <div class="ghead"><span class="gname">${guestLabel(g.gnum, g.isRep)}</span>${withDocThumb ? docThumbHTML(g.gnum, g.isRep) : ''}${withStatus ? faceThumbHTML(g.gnum) : ''}${withStatus ? faceStampHTML(g.gnum) : ''}</div>
       ${rows}
+      ${withStatus ? faceRetakeButtonHTML(g.gnum) : ''}
     </div>`;
   });
 
@@ -1350,10 +1353,12 @@ function faceStampHTML(gnum){
   const status = faceStatusFor(gnum);
   if(!status) return '';
   const key = status === 'done' ? 'faceStatusDone' : status === 'current' ? 'faceStatusCurrent' : 'faceStatusPending';
-  if(status === 'done'){
-    return `<button type="button" class="gstamp gstamp-done" onclick="jumpToGuestCapture('${gnum}')">${t(key)}</button>`;
-  }
   return `<span class="gstamp gstamp-${status}">${t(key)}</span>`;
+}
+
+function faceRetakeButtonHTML(gnum){
+  if(faceStatusFor(gnum) !== 'done') return '';
+  return `<button type="button" class="btn btn-ghost mt8" onclick="jumpToGuestCapture('${gnum}')">${t('btnRetakeThisGuest')}</button>`;
 }
 
 function faceThumbHTML(gnum){
@@ -1387,11 +1392,26 @@ let faceCaptures = {};
 let arrivalLocation = null;
 let arrivalLocationStatus = 'idle'; // idle | requesting | ok | denied | unsupported
 
+function showLocError(key){
+  const banner = document.getElementById('locErrorBanner');
+  const textEl = document.getElementById('locErrorText');
+  if(textEl) textEl.textContent = t(key);
+  if(banner) banner.style.display = 'flex';
+}
+
+function hideLocError(){
+  const banner = document.getElementById('locErrorBanner');
+  if(banner) banner.style.display = 'none';
+}
+
 function requestArrivalLocation(){
   const el = document.getElementById('locStatus');
+  hideLocError();
+
   if(!('geolocation' in navigator)){
     arrivalLocationStatus = 'unsupported';
-    if(el) el.textContent = t('locUnsupported');
+    if(el) el.textContent = '';
+    showLocError('locUnsupportedBannerText');
     return;
   }
   arrivalLocationStatus = 'requesting';
@@ -1402,11 +1422,13 @@ function requestArrivalLocation(){
       arrivalLocationStatus = 'ok';
       const s = document.getElementById('locStatus');
       if(s) s.textContent = t('locOk');
+      hideLocError();
     },
     ()=>{
       arrivalLocationStatus = 'denied';
       const s = document.getElementById('locStatus');
-      if(s) s.textContent = t('locDenied');
+      if(s) s.textContent = '';
+      showLocError('locDeniedBannerText');
     },
     { enableHighAccuracy: true, timeout: 10000 }
   );
@@ -1452,11 +1474,6 @@ function renderFaceStep(){
   document.getElementById('camPreview').style.display = 'none';
   document.getElementById('camSilhouette').style.display = 'block';
 
-  // "back to list" is only meaningful once at least one guest already has a
-  // photo to go back to (otherwise there's nothing to return to)
-  const backBtn = document.getElementById('faceBackBtn');
-  if(backBtn) backBtn.style.display = dayGuestQueue.some(g => faceCaptures[g.gnum]) ? 'block' : 'none';
-
   populateReview('dayReviewSummary');
 }
 
@@ -1474,16 +1491,15 @@ function relabelFaceStep(){
     btnLabel.textContent = t('faceCaptureBtn', {name: cur.name});
   }
 
-  const backBtn = document.getElementById('faceBackBtn');
-  if(backBtn) backBtn.textContent = t('btnBackToList');
-
   const locEl = document.getElementById('locStatus');
   if(locEl){
     if(arrivalLocationStatus === 'ok') locEl.textContent = t('locOk');
-    else if(arrivalLocationStatus === 'denied') locEl.textContent = t('locDenied');
     else if(arrivalLocationStatus === 'requesting') locEl.textContent = t('locRequesting');
-    else if(arrivalLocationStatus === 'unsupported') locEl.textContent = t('locUnsupported');
+    else locEl.textContent = '';
   }
+  if(arrivalLocationStatus === 'denied') showLocError('locDeniedBannerText');
+  else if(arrivalLocationStatus === 'unsupported') showLocError('locUnsupportedBannerText');
+  else hideLocError();
 
   populateReview('dayReviewSummary');
 }
@@ -1571,13 +1587,6 @@ function jumpToGuestCapture(gnum){
   document.getElementById('faceAuthSection').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
-// backs out of the current capture step (e.g. after jumping to retake someone)
-// without requiring a new photo — resumes wherever is still incomplete
-function cancelFaceStep(){
-  document.getElementById('faceConfirmArea').style.display = 'none';
-  advanceToNextIncomplete();
-}
-
 function doStayConfirm(){
   document.getElementById('stayConfirmArea').style.display = 'none';
   document.getElementById('stayConfirmed').style.display = 'block';
@@ -1653,7 +1662,7 @@ const I18N = {
   stepBTitle: {ja:'宿泊者情報', en:'Guest Information', ko:'숙박자 정보', zhCN:'住宿者信息', zhTW:'住宿者資訊'},
   repIdTitle: {ja:'代表者の本人確認書類', en:"Representative's ID Document", ko:'대표자 신분증', zhCN:'代表人身份证件', zhTW:'代表人身份證件'},
   repIdUploadTitle: {ja:'運転免許証 / マイナンバーカード / パスポート のいずれか', en:"Driver's License / My Number Card / Passport (any one)", ko:'운전면허증 / 마이넘버카드 / 여권 중 하나', zhCN:'驾照 / 我的号码卡 / 护照（任选其一）', zhTW:'駕照 / 我的號碼卡 / 護照（任選其一）'},
-  repIdUploadSub: {ja:'クリックしてアップロード(ダミー) ・ JPEG, PNG, PDF', en:'Click to upload (demo) ・ JPEG, PNG, PDF', ko:'클릭하여 업로드(데모) ・ JPEG, PNG, PDF', zhCN:'点击上传（示例） ・ JPEG, PNG, PDF', zhTW:'點擊上傳（示例） ・ JPEG, PNG, PDF'},
+  repIdUploadSub: {ja:'クリックしてアップロード ・ JPEG, PNG, PDF', en:'Click to upload ・ JPEG, PNG, PDF', ko:'클릭하여 업로드 ・ JPEG, PNG, PDF', zhCN:'点击上传 ・ JPEG, PNG, PDF', zhTW:'點擊上傳 ・ JPEG, PNG, PDF'},
   repIdHint: {ja:'代表者が日本国籍のため、本人確認書類をアップロードしてください。同行者に外国籍の方がいる場合は、その方の旅券もあわせてアップロードしてください。', en:"Since the representative holds Japanese nationality, please upload their ID. If any companion holds a different nationality, please also upload their passport.", ko:'대표자가 일본 국적이므로 신분증을 업로드해 주세요. 동행자 중 외국 국적이 있는 경우, 해당 여권도 함께 업로드해 주세요.', zhCN:'由于代表人为日本国籍，请上传其身份证件。若同行者中有外国籍人士，请一并上传其护照。', zhTW:'由於代表人為日本國籍，請上傳其身份證件。若同行者中有外國籍人士，請一併上傳其護照。'},
   bannerNoticeLabel: {ja:'ご案内：', en:'Notice: ', ko:'안내: ', zhCN:'提示：', zhTW:'提示：'},
   bannerNoticeText: {ja:'ご入力内容および本人確認書類の確認が取れ次第、玄関の暗証番号をお送りいたします。', en:'Once we have confirmed your information and ID documents, we will send you the entrance door passcode.', ko:'입력하신 내용과 신분증 확인이 완료되는 대로 현관 비밀번호를 보내드립니다.', zhCN:'确认您填写的信息及身份证件后，我们将发送玄关密码给您。', zhTW:'確認您填寫的資訊及身份證件後，我們將發送玄關密碼給您。'},
@@ -1668,7 +1677,7 @@ const I18N = {
   labelNat: {ja:'国籍', en:'Nationality', ko:'국적', zhCN:'国籍', zhTW:'國籍'},
   labelPassport: {ja:'旅券番号', en:'Passport Number', ko:'여권 번호', zhCN:'护照号码', zhTW:'護照號碼'},
   passportUploadTitle: {ja:'パスポート画像をアップロード', en:'Upload Passport Photo', ko:'여권 사진 업로드', zhCN:'上传护照照片', zhTW:'上傳護照照片'},
-  passportUploadSub: {ja:'クリックしてアップロード(ダミー)', en:'Click to upload (demo)', ko:'클릭하여 업로드(데모)', zhCN:'点击上传（示例）', zhTW:'點擊上傳（示例）'},
+  passportUploadSub: {ja:'クリックしてアップロード', en:'Click to upload', ko:'클릭하여 업로드', zhCN:'点击上传', zhTW:'點擊上傳'},
   labelZip: {ja:'郵便番号', en:'Postal Code', ko:'우편번호', zhCN:'邮政编码', zhTW:'郵遞區號'},
   btnZipSearch: {ja:'住所を検索', en:'Look up Address', ko:'주소 검색', zhCN:'查询地址', zhTW:'查詢地址'},
   labelAddr: {ja:'住所', en:'Address', ko:'주소', zhCN:'住址', zhTW:'住址'},
@@ -1721,7 +1730,6 @@ const I18N = {
   guideSectionTitle: {ja:'お家の使い方ガイド', en:'House Guide', ko:'숙소 이용 가이드', zhCN:'住宿使用指南', zhTW:'住宿使用指南'},
   guideSub: {ja:'ご滞在中の設備の使い方やチェックアウト方法をまとめています。ご到着前にぜひご一読ください。', en:'This guide covers how to use the facilities and how to check out. Please take a look before you arrive.', ko:'숙박 중 시설 이용법과 체크아웃 방법을 정리했습니다. 도착 전에 꼭 읽어봐 주세요.', zhCN:'本指南整理了设备使用方法及退房流程，请于抵达前阅读。', zhTW:'本指南整理了設備使用方法及退房流程，請於抵達前閱讀。'},
   btnGuide: {ja:'お家の使い方ガイドを見る ↗', en:'View House Guide ↗', ko:'숙소 이용 가이드 보기 ↗', zhCN:'查看住宿使用指南 ↗', zhTW:'查看住宿使用指南 ↗'},
-  btnDemoDay: {ja:'チェックイン当日の画面を見る（デモ用） →', en:'View Arrival Day Screen (Demo) →', ko:'체크인 당일 화면 보기(데모) →', zhCN:'查看入住当天画面（示例） →', zhTW:'查看入住當天畫面（示例） →'},
 
   screen4Title: {ja:'チェックイン当日のご確認', en:'Arrival Day Confirmation', ko:'체크인 당일 확인', zhCN:'入住当天确认', zhTW:'入住當天確認'},
   screen4Sub: {ja:'ご到着後、ご自身のスマートフォンで入力内容にお間違いがないかご確認のうえ、本人確認用のお写真の撮影と滞在確認を行ってください。', en:'After you arrive, please use your own smartphone to check your information, take a quick ID photo, and confirm your stay.', ko:'도착 후 본인의 스마트폰으로 입력 내용에 오류가 없는지 확인하시고, 본인 확인용 사진 촬영과 숙박 확인을 진행해 주세요.', zhCN:'抵达后，请使用您自己的智能手机确认填写内容无误，并完成身份确认拍照及入住确认。', zhTW:'抵達後，請使用您自己的智慧型手機確認填寫內容無誤，並完成身份確認拍照及入住確認。'},
@@ -1736,10 +1744,11 @@ const I18N = {
   faceCaptured: {ja:'{name}様の撮影が完了しました', en:"Photo captured for {name}", ko:'{name}님 촬영이 완료되었습니다', zhCN:'{name}的照片已拍摄完成', zhTW:'{name}的照片已拍攝完成'},
   locRequesting: {ja:'位置情報を取得しています…', en:'Getting your location…', ko:'위치 정보를 가져오는 중…', zhCN:'正在获取位置信息…', zhTW:'正在取得位置資訊…'},
   locOk: {ja:'位置情報を記録しました', en:'Location recorded', ko:'위치 정보가 기록되었습니다', zhCN:'已记录位置信息', zhTW:'已記錄位置資訊'},
-  locDenied: {ja:'位置情報を取得できませんでした（ホストが後ほど確認します）', en:"Couldn't get your location (your host will follow up)", ko:'위치 정보를 가져올 수 없었습니다（호스트가 추후 확인합니다）', zhCN:'无法获取位置信息（房东将稍后确认）', zhTW:'無法取得位置資訊（房東將稍後確認）'},
-  locUnsupported: {ja:'このブラウザでは位置情報が取得できません', en:"This browser doesn't support location", ko:'이 브라우저에서는 위치 정보를 가져올 수 없습니다', zhCN:'此浏览器不支持获取位置信息', zhTW:'此瀏覽器不支援取得位置資訊'},
+  locDeniedBannerText: {ja:'位置情報の利用が許可されていません。チェックインを完了するには、この端末の設定で位置情報の利用を許可してから、もう一度お試しください。', en:'Location access is not allowed. To complete check-in, please enable location permission in your device settings, then try again.', ko:'위치 정보 사용이 허용되지 않았습니다. 체크인을 완료하려면 기기 설정에서 위치 정보 사용을 허용한 후 다시 시도해 주세요.', zhCN:'未允许使用位置信息。若要完成入住手续，请在设备设置中允许位置信息访问后重试。', zhTW:'未允許使用位置資訊。若要完成入住手續，請在裝置設定中允許位置資訊存取後重試。'},
+  locUnsupportedBannerText: {ja:'このブラウザでは位置情報を取得できません。SafariやChromeなど標準のブラウザで開き直してください。', en:"This browser can't access your location. Please reopen this page in Safari or Chrome.", ko:'이 브라우저에서는 위치 정보를 가져올 수 없습니다. Safari나 Chrome 등 표준 브라우저에서 다시 열어 주세요.', zhCN:'此浏览器无法获取位置信息，请使用Safari或Chrome等标准浏览器重新打开此页面。', zhTW:'此瀏覽器無法取得位置資訊，請使用Safari或Chrome等標準瀏覽器重新開啟此頁面。'},
+  btnRetryLocation: {ja:'もう一度試す', en:'Try Again', ko:'다시 시도', zhCN:'重试', zhTW:'重試'},
   btnRetake: {ja:'撮り直す', en:'Retake Photo', ko:'다시 촬영', zhCN:'重新拍摄', zhTW:'重新拍攝'},
-  btnBackToList: {ja:'一覧に戻る', en:'Back to List', ko:'목록으로 돌아가기', zhCN:'返回列表', zhTW:'返回列表'},
+  btnRetakeThisGuest: {ja:'写真を撮り直す', en:"Retake This Guest's Photo", ko:'사진 다시 촬영', zhCN:'重新拍摄照片', zhTW:'重新拍攝照片'},
   btnUsePhoto: {ja:'この写真で進む', en:'Use This Photo', ko:'이 사진으로 진행', zhCN:'使用此照片', zhTW:'使用此照片'},
   alreadyCheckedInStampS1: {ja:'手続き済み', en:'Completed', ko:'완료', zhCN:'已完成', zhTW:'已完成'},
   alreadyCheckedInText: {ja:'チェックインの手続きはすでに完了しています。本人確認は、ホストが後ほど提出書類と照らし合わせて確認いたします。追加の操作は必要ありません。', en:'Your check-in has already been completed. Your host will review your ID against your submitted documents afterward — no further action is needed.', ko:'체크인 절차는 이미 완료되었습니다. 본인 확인은 호스트가 이후 제출하신 서류와 대조하여 확인합니다. 추가 조작은 필요하지 않습니다.', zhCN:'入住手续已经完成。身份确认将由房东稍后与您提交的证件核对确认，无需进行其他操作。', zhTW:'入住手續已經完成。身份確認將由房東稍後與您提交的證件核對確認，無需進行其他操作。'},
@@ -1751,9 +1760,7 @@ const I18N = {
   checkoutNote: {ja:'10:00 までにスマートロックが自動施錠されます', en:'The smart lock will automatically lock at 10:00', ko:'10:00까지 스마트락이 자동으로 잠깁니다', zhCN:'10:00前智能锁将自动上锁', zhTW:'10:00前智慧鎖將自動上鎖'},
   labelEmergency: {ja:'緊急連絡先', en:'Emergency Contact', ko:'긴급 연락처', zhCN:'紧急联系方式', zhTW:'緊急聯絡方式'},
   emergencyNote: {ja:'（24時間対応）', en:' (Available 24 hours)', ko:' (24시간 대응)', zhCN:'（24小时应对）', zhTW:'（24小時應對）'},
-  btnEditInfo: {ja:'入力内容を修正する', en:'Edit My Information', ko:'입력 내용 수정하기', zhCN:'修改填写内容', zhTW:'修改填寫內容'},
-
-  footerNote: {ja:'画面イメージ（モック）です。実データの送信・保存は行われません。', en:'This is a UI mockup. No real data is sent or stored.', ko:'이것은 화면 이미지(목업)입니다. 실제 데이터의 송수신·저장은 이루어지지 않습니다.', zhCN:'此为界面示意图（原型），不会实际发送或保存数据。', zhTW:'此為介面示意圖（原型），不會實際發送或保存資料。'}
+  btnEditInfo: {ja:'入力内容を修正する', en:'Edit My Information', ko:'입력 내용 수정하기', zhCN:'修改填写内容', zhTW:'修改填寫內容'}
 };
 
 function t(key, vars){
