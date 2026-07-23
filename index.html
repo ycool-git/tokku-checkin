@@ -101,6 +101,10 @@
   }
   .langbtn:hover{border-color:var(--brass);background:#fbf3e8;}
   .langbtn:active{transform:scale(.98);}
+  .langbtn:disabled{opacity:.45;cursor:not-allowed;}
+  .langgate-loading{
+    margin-top:16px;font-size:12.5px;font-weight:700;color:var(--brass-dark);
+  }
   .brandmark{
     width:38px;height:38px;border-radius:9px;
     background:var(--ink-900);
@@ -527,6 +531,7 @@
         <button class="langbtn" onclick="selectLang('zhCN')">中文（简体）</button>
         <button class="langbtn" onclick="selectLang('zhTW')">中文（繁體）</button>
       </div>
+      <div class="langgate-loading" id="langGateLoading" style="display:none;"></div>
     </div>
   </div>
 
@@ -549,6 +554,10 @@
 
         <div class="section">
           <div class="section-head"><span class="tag">STEP 1-A</span><h3 data-i18n="stepATitle"></h3></div>
+          <div class="row2">
+            <div class="field"><label class="req" data-i18n="labelCheckinDate"></label><input type="date" id="checkinDate"></div>
+            <div class="field"><label class="req" data-i18n="labelCheckoutDate"></label><input type="date" id="checkoutDate"></div>
+          </div>
           <div class="field">
             <label class="req" data-i18n="stepATitle"></label>
             <input type="number" min="1" value="2" id="guestCount" onchange="renderGuestCards()">
@@ -564,13 +573,14 @@
         <!-- 全員日本国籍の場合のみ表示：代表者の本人確認書類 -->
         <div class="section" id="repIdBlock">
           <div class="section-head"><span class="tag">STEP 1-C</span><h3 data-i18n="repIdTitle"></h3></div>
-          <div class="upload-slot" id="repIdUpload" data-sub-key="repIdUploadSub" onclick="mockUpload(this)">
+          <label class="upload-slot" id="repIdUpload" data-sub-key="repIdUploadSub">
+            <input type="file" accept="image/*,application/pdf" style="display:none" onchange="handleFileUpload(this,'repIdUpload')">
             <div class="icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
             <div class="meta">
               <div class="t" data-i18n="repIdUploadTitle"></div>
               <div class="s" data-i18n="repIdUploadSub"></div>
             </div>
-          </div>
+          </label>
           <div class="hint" data-i18n="repIdHint"></div>
         </div>
 
@@ -592,6 +602,8 @@
         </div>
 
         <div class="banner"><span>🛈</span><div id="reviewBannerText"></div></div>
+
+        <div class="banner banner-error" id="sendErrorBanner" style="display:none;"></div>
 
         <div class="btnrow">
           <button class="btn btn-ghost" onclick="goStep(1)" data-i18n="btnBack"></button>
@@ -675,6 +687,16 @@
 <footer class="note" data-i18n="footerNote"></footer>
 
 <script>
+// Google Apps Script web app URL (backend: Sheets + Drive). See Code.gs.
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzpzVW_xp9i83Ps0Bw4hLlTTh18xpqFF5XvefvbvR-5z6Rb1b4ivYHZAfQLKSA0nUCvXg/exec';
+
+// slotId -> {base64, mimeType, filename} for real file uploads (ID/passport photos)
+const uploadedFiles = {};
+
+// when set (arrival day, loaded from the backend), the day-of screen renders
+// from this instead of the local input form
+let serverGuestData = null;
+
 let editingFromDay4 = false;
 
 function goStep(n){
@@ -704,8 +726,56 @@ function updateSendButton(){
     if(btn){ btn.textContent = t('btnReturnDay4'); btn.onclick = ()=>goStep(4); }
     if(bannerEl) bannerEl.textContent = t('reviewBannerEdit');
   } else {
-    if(btn){ btn.textContent = t('btnSendHost'); btn.onclick = ()=>goStep(3); }
+    if(btn){ btn.textContent = t('btnSendHost'); btn.onclick = ()=>submitToHost(); }
     if(bannerEl) bannerEl.textContent = t('reviewBanner');
+  }
+}
+
+function buildSubmitPayload(){
+  const guests = collectGuestsFromDOM();
+  const rep = guests.find(g=>g.isRep) || guests[0] || {};
+  return {
+    action: 'submit',
+    checkinDate: document.getElementById('checkinDate').value || '',
+    checkoutDate: document.getElementById('checkoutDate').value || '',
+    repName: rep.name || '',
+    repPhone: rep.phone || '',
+    repEmail: rep.email || '',
+    repAddress: rep.addr || '',
+    guests: guests.map(g=>{
+      const fileKey = g.isRep ? 'repIdUpload' : ('passportUpload-' + g.gnum);
+      const file = uploadedFiles[fileKey];
+      return {
+        name: g.name, age: g.age, nationality: g.nat, address: g.addr,
+        passportNo: g.passportNo,
+        docBase64: file ? file.base64 : '',
+        docMimeType: file ? file.mimeType : ''
+      };
+    })
+  };
+}
+
+async function submitToHost(){
+  const btn = document.getElementById('sendOrReturnBtn');
+  const errEl = document.getElementById('sendErrorBanner');
+  if(errEl) errEl.style.display = 'none';
+  if(btn){ btn.disabled = true; btn.textContent = t('sending'); }
+
+  try{
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(buildSubmitPayload())
+    });
+    const data = await res.json();
+    if(!data.success) throw new Error(data.error || 'submit failed');
+    goStep(3);
+  } catch(err){
+    console.error(err);
+    if(errEl){ errEl.innerHTML = '<span>⚠</span><div>' + t('sendFailed') + '</div>'; errEl.style.display = 'flex'; }
+  } finally {
+    if(btn){ btn.disabled = false; }
+    updateSendButton();
   }
 }
 
@@ -781,10 +851,11 @@ function guestCardHTML(i){
 
       <div class="field g-passport" style="display:none;">
         <label class="req" data-i18n="labelPassport"></label><input type="text" class="g-passno" placeholder="N1234567">
-        <div class="upload-slot mt8" id="passportUpload-${i}" data-sub-key="passportUploadSub" onclick="mockUpload(this)">
+        <label class="upload-slot mt8" id="passportUpload-${i}" data-sub-key="passportUploadSub">
+          <input type="file" accept="image/*,application/pdf" style="display:none" onchange="handleFileUpload(this,'passportUpload-${i}')">
           <div class="icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="meta"><div class="t" data-i18n="passportUploadTitle"></div><div class="s" data-i18n="passportUploadSub"></div></div>
-        </div>
+        </label>
       </div>
 
       ${addressBlock}
@@ -860,6 +931,13 @@ function updateDocRequirement(){
 
 function validateForm(){
   const errors = [];
+
+  const checkinVal = document.getElementById('checkinDate').value;
+  const checkoutVal = document.getElementById('checkoutDate').value;
+  if(!checkinVal) errors.push(t('errCheckinDate'));
+  if(!checkoutVal) errors.push(t('errCheckoutDate'));
+  if(checkinVal && checkoutVal && checkoutVal < checkinVal) errors.push(t('errDateOrder'));
+
   document.querySelectorAll('#guestCardsWrap .guestcard').forEach(card=>{
     const gnum = card.dataset.guest;
     const isRep = gnum === '1';
@@ -940,56 +1018,131 @@ function guestAddress(card){
   return (own ? own.value : '').trim() || t('notEntered');
 }
 
+// Normalized guest list, either read live from the input form (pre-arrival,
+// STEP01-03) or from the reservation fetched from the backend (arrival day,
+// STEP04 when serverGuestData is set). Both paths produce the same shape.
+function collectGuestsFromDOM(){
+  return [...document.querySelectorAll('#guestCardsWrap .guestcard')].map(card=>{
+    const gnum = card.dataset.guest;
+    const isRep = gnum === '1';
+    return {
+      gnum, isRep,
+      name: (card.querySelector('.g-name').value || '').trim(),
+      age: (card.querySelector('.g-age').value || '').trim(),
+      nat: card.querySelector('.g-nat').value,
+      addr: guestAddress(card),
+      passportNo: (card.querySelector('.g-passno').value || '').trim(),
+      phone: isRep ? (document.getElementById('repPhone').value || '').trim() : '',
+      email: isRep ? (document.getElementById('repEmail').value || '').trim() : ''
+    };
+  });
+}
+
+function collectGuestsFromServer(){
+  if(!serverGuestData) return [];
+  return (serverGuestData.guests || []).map((g, idx)=>({
+    gnum: String(idx + 1),
+    isRep: idx === 0,
+    name: g.name || '',
+    age: g.age || '',
+    nat: g.nationality || 'JP',
+    addr: g.address || '',
+    passportNo: g.passportNo || '',
+    phone: idx === 0 ? (serverGuestData.repPhone || '') : '',
+    email: idx === 0 ? (serverGuestData.repEmail || '') : ''
+  }));
+}
+
+function currentGuests(forDay){
+  if(forDay && ARRIVAL_MODE) return collectGuestsFromServer();
+  return collectGuestsFromDOM();
+}
+
 function populateReview(targetId){
-  const cards = [...document.querySelectorAll('#guestCardsWrap .guestcard')];
-  const repCard = cards.find(c => c.dataset.guest === '1');
-  const repName = (repCard.querySelector('.g-name').value || '').trim() || t('repGuestLabel');
+  const forDay = targetId === 'dayReviewSummary';
+  const guests = currentGuests(forDay);
+  if(!guests.length){
+    document.getElementById(targetId).innerHTML = '';
+    return;
+  }
+
+  const repName = guests[0].name || t('repGuestLabel');
   const titleEl = document.getElementById('screen2Title');
   if(titleEl) titleEl.textContent = t('reviewTitle', {name: repName});
 
-  const withStatus = targetId === 'dayReviewSummary';
+  const withStatus = forDay;
 
-  const blocks = cards.map(card=>{
-    const gnum = card.dataset.guest;
-    const isRep = gnum === '1';
-    const name = (card.querySelector('.g-name').value || '').trim() || guestLabel(gnum, isRep);
-    const age = (card.querySelector('.g-age').value || '').trim();
-    const ageDisp = age ? (LANG === 'en' ? age : (age + t('ageUnit'))) : t('notEntered');
-    const nat = card.querySelector('.g-nat').value;
-    const addr = guestAddress(card);
+  let datesBlock = '';
+  if(targetId === 'reviewSummary'){
+    const checkin = document.getElementById('checkinDate').value || t('notEntered');
+    const checkout = document.getElementById('checkoutDate').value || t('notEntered');
+    datesBlock = `<div class="guestcard">
+      <div class="summary-row"><div class="k">${t('labelCheckinDate')}</div><div class="v">${checkin}</div></div>
+      <div class="summary-row"><div class="k">${t('labelCheckoutDate')}</div><div class="v">${checkout}</div></div>
+    </div>`;
+  } else if(forDay && serverGuestData){
+    const checkin = serverGuestData.checkinDate || t('notEntered');
+    const checkout = serverGuestData.checkoutDate || t('notEntered');
+    datesBlock = `<div class="guestcard">
+      <div class="summary-row"><div class="k">${t('labelCheckinDate')}</div><div class="v">${checkin}</div></div>
+      <div class="summary-row"><div class="k">${t('labelCheckoutDate')}</div><div class="v">${checkout}</div></div>
+    </div>`;
+  }
+
+  const blocks = guests.map(g=>{
+    const name = g.name || guestLabel(g.gnum, g.isRep);
+    const ageDisp = g.age ? (LANG === 'en' ? g.age : (g.age + t('ageUnit'))) : t('notEntered');
+    const addr = g.addr || t('notEntered');
 
     let rows = `
       <div class="summary-row"><div class="k">${t('labelName')}</div><div class="v">${name}</div></div>
       <div class="summary-row"><div class="k">${t('labelAge')}</div><div class="v">${ageDisp}</div></div>
-      <div class="summary-row"><div class="k">${t('labelNat')}</div><div class="v">${natLabel(nat)}</div></div>
+      <div class="summary-row"><div class="k">${t('labelNat')}</div><div class="v">${natLabel(g.nat)}</div></div>
       <div class="summary-row"><div class="k">${t('labelAddr')}</div><div class="v">${addr}</div></div>`;
 
-    if(nat !== 'JP'){
-      const passno = (card.querySelector('.g-passno').value || '').trim() || t('notEntered');
+    if(g.nat !== 'JP'){
+      const passno = g.passportNo || t('notEntered');
       rows += `<div class="summary-row"><div class="k">${t('labelPassport')}</div><div class="v">${passno}</div></div>`;
     }
-    if(isRep){
-      const phone = (document.getElementById('repPhone').value || '').trim() || t('notEntered');
-      const email = (document.getElementById('repEmail').value || '').trim() || t('notEntered');
+    if(g.isRep){
+      const phone = g.phone || t('notEntered');
+      const email = g.email || t('notEntered');
       rows += `
         <div class="summary-row"><div class="k">${t('labelPhone')}</div><div class="v">${phone}</div></div>
         <div class="summary-row"><div class="k">${t('labelEmail')}</div><div class="v">${email}</div></div>`;
     }
 
     return `<div class="guestcard">
-      <div class="ghead"><span class="gname">${guestLabel(gnum, isRep)}</span>${withStatus ? faceStampHTML(gnum) : ''}</div>
+      <div class="ghead"><span class="gname">${guestLabel(g.gnum, g.isRep)}</span>${withStatus ? faceStampHTML(g.gnum) : ''}</div>
       ${rows}
     </div>`;
   });
 
-  document.getElementById(targetId).innerHTML = blocks.join('');
+  document.getElementById(targetId).innerHTML = datesBlock + blocks.join('');
 }
 
-function mockUpload(el){
-  el.classList.add('filled');
-  const sEl = el.querySelector('.meta .s');
-  sEl.textContent = t('uploadedStatus');
-  el.querySelector('.icon').innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function handleFileUpload(inputEl, slotId){
+  const file = inputEl.files && inputEl.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(){
+    const result = String(reader.result || '');
+    const comma = result.indexOf(',');
+    const base64 = comma >= 0 ? result.slice(comma + 1) : '';
+    uploadedFiles[slotId] = { base64, mimeType: file.type || 'image/jpeg', filename: file.name };
+
+    const slot = document.getElementById(slotId);
+    if(!slot) return;
+    slot.classList.add('filled');
+    slot.dataset.filename = file.name;
+    slot.querySelector('.icon').innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    refreshUploadTexts();
+  };
+  reader.onerror = function(){
+    alert(t('uploadFailed'));
+  };
+  reader.readAsDataURL(file);
 }
 
 // day-of arrival: guest self-checks their info, completes face auth one guest at a time, then confirms the stay
@@ -1012,13 +1165,11 @@ function faceStampHTML(gnum){
 }
 
 function buildDayGuestQueue(){
-  const cards = [...document.querySelectorAll('#guestCardsWrap .guestcard')];
-  dayGuestQueue = cards.map(card=>{
-    const gnum = card.dataset.guest;
-    const isRep = gnum === '1';
-    const name = (card.querySelector('.g-name').value || '').trim() || guestLabel(gnum, isRep);
-    return { gnum, name, isRep };
-  });
+  dayGuestQueue = currentGuests(true).map(g=>({
+    gnum: g.gnum,
+    name: g.name || guestLabel(g.gnum, g.isRep),
+    isRep: g.isRep
+  }));
   dayGuestIndex = 0;
 }
 
@@ -1028,6 +1179,12 @@ function resetStayConfirm(){
   document.getElementById('stayStamp').classList.remove('show');
 
   buildDayGuestQueue();
+
+  if(!dayGuestQueue.length){
+    document.getElementById('faceAuthSection').style.display = 'none';
+    return;
+  }
+
   document.getElementById('faceAuthSection').style.display = 'block';
   renderFaceStep();
 }
@@ -1104,6 +1261,14 @@ function doStayConfirm(){
   requestAnimationFrame(()=>{
     document.getElementById('stayStamp').classList.add('show');
   });
+
+  if(serverGuestData && serverGuestData.reservationId){
+    fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'checkin', reservationId: serverGuestData.reservationId })
+    }).catch(err=>console.error(err));
+  }
 }
 
 // ==================== i18n ====================
@@ -1139,6 +1304,11 @@ const I18N = {
   screen1Title: {ja:'滞在前 本人確認フォーム', en:'Pre-Arrival ID Verification Form', ko:'숙박 전 본인 확인 양식', zhCN:'入住前身份确认表', zhTW:'入住前身份確認表'},
   screen1Sub: {ja:'チェックイン日の3日前までにご入力ください。ご入力内容は宿泊者名簿として法令に基づき保管されます。', en:'Please complete this at least 3 days before check-in. Your information will be kept on file as required by law.', ko:'체크인 3일 전까지 입력해 주세요. 입력하신 내용은 법령에 따라 숙박자 명부로 보관됩니다.', zhCN:'请在入住日3天前完成填写。您填写的信息将依法作为住宿者名册留存。', zhTW:'請於入住日3天前完成填寫。您填寫的資訊將依法作為住宿者名冊留存。'},
   stepATitle: {ja:'宿泊人数', en:'Number of Guests', ko:'숙박 인원', zhCN:'入住人数', zhTW:'入住人數'},
+  labelCheckinDate: {ja:'チェックイン予定日', en:'Check-in Date', ko:'체크인 예정일', zhCN:'预计入住日期', zhTW:'預計入住日期'},
+  labelCheckoutDate: {ja:'チェックアウト予定日', en:'Check-out Date', ko:'체크아웃 예정일', zhCN:'预计退房日期', zhTW:'預計退房日期'},
+  errCheckinDate: {ja:'チェックイン予定日が入力されていません。', en:'Check-in date has not been entered.', ko:'체크인 예정일이 입력되지 않았습니다.', zhCN:'尚未填写预计入住日期。', zhTW:'尚未填寫預計入住日期。'},
+  errCheckoutDate: {ja:'チェックアウト予定日が入力されていません。', en:'Check-out date has not been entered.', ko:'체크아웃 예정일이 입력되지 않았습니다.', zhCN:'尚未填写预计退房日期。', zhTW:'尚未填寫預計退房日期。'},
+  errDateOrder: {ja:'チェックアウト日はチェックイン日より後にしてください。', en:'Check-out date must be after the check-in date.', ko:'체크아웃 날짜는 체크인 날짜보다 이후여야 합니다.', zhCN:'退房日期需晚于入住日期。', zhTW:'退房日期需晚於入住日期。'},
   guestCountHint: {ja:'住所・氏名等はご宿泊者全員分が必要です。ご家族など住所が同じ場合はワンタップでコピーできます。', en:'Address and name are required for every guest. If a family shares the same address, you can copy it with one tap.', ko:'주소·성명 등은 모든 숙박자 정보가 필요합니다. 가족 등 주소가 같은 경우 한 번의 탭으로 복사할 수 있습니다.', zhCN:'住址、姓名等需填写所有住宿者的信息。家人等住址相同时可一键复制。', zhTW:'住址、姓名等需填寫所有住宿者的資訊。家人等住址相同時可一鍵複製。'},
   stepBTitle: {ja:'宿泊者情報', en:'Guest Information', ko:'숙박자 정보', zhCN:'住宿者信息', zhTW:'住宿者資訊'},
   repIdTitle: {ja:'代表者の本人確認書類', en:"Representative's ID Document", ko:'대표자 신분증', zhCN:'代表人身份证件', zhTW:'代表人身份證件'},
@@ -1186,6 +1356,11 @@ const I18N = {
   errRepDoc: {ja:'代表者の本人確認書類がアップロードされていません。', en:"The representative's ID document has not been uploaded.", ko:'대표자의 신분증이 업로드되지 않았습니다.', zhCN:'尚未上传代表人的身份证件。', zhTW:'尚未上傳代表人的身份證件。'},
   errPassportDoc: {ja:'{name} のパスポート画像がアップロードされていません。', en:"{name}'s passport photo has not been uploaded.", ko:'{name}님의 여권 사진이 업로드되지 않았습니다.', zhCN:'尚未上传{name}的护照照片。', zhTW:'尚未上傳{name}的護照照片。'},
   uploadedStatus: {ja:'アップロード済み', en:'Uploaded', ko:'업로드 완료', zhCN:'已上传', zhTW:'已上傳'},
+  uploadFailed: {ja:'ファイルの読み込みに失敗しました。もう一度お試しください。', en:'Failed to read the file. Please try again.', ko:'파일을 읽는 데 실패했습니다. 다시 시도해 주세요.', zhCN:'文件读取失败，请重试。', zhTW:'檔案讀取失敗，請重試。'},
+  sending: {ja:'送信中…', en:'Sending…', ko:'전송 중…', zhCN:'发送中…', zhTW:'發送中…'},
+  sendFailed: {ja:'送信に失敗しました。通信環境をご確認のうえ、もう一度お試しください。', en:'Sending failed. Please check your connection and try again.', ko:'전송에 실패했습니다. 네트워크 상태를 확인한 후 다시 시도해 주세요.', zhCN:'发送失败，请检查网络后重试。', zhTW:'發送失敗，請檢查網路後重試。'},
+  loadingReservation: {ja:'本日のご予約を確認しています…', en:"Looking up today's reservation…", ko:'오늘의 예약을 확인하고 있습니다…', zhCN:'正在查询今日预订…', zhTW:'正在查詢今日預訂…'},
+  noReservationFound: {ja:'本日のご予約が見つかりませんでした。恐れ入りますが、ホストまでご連絡ください。', en:"We couldn't find a reservation for today. Please contact your host.", ko:'오늘 예약을 찾을 수 없습니다. 호스트에게 연락해 주세요.', zhCN:'未找到今日的预订，请联系房东。', zhTW:'未找到今日的預訂，請聯繫房東。'},
 
   reviewTitle: {ja:'{name}様、内容のご確認', en:'{name}, Please Review Your Information', ko:'{name}님, 입력 내용을 확인해 주세요', zhCN:'{name} 您好，请确认填写内容', zhTW:'{name} 您好，請確認填寫內容'},
   reviewSub: {ja:'宿泊者全員分の入力内容です。お間違いがないかご確認ください。', en:'Here is the information entered for all guests. Please check that everything is correct.', ko:'모든 숙박자의 입력 내용입니다. 틀린 부분이 없는지 확인해 주세요.', zhCN:'以下为所有住宿者填写的信息，请确认内容是否正确。', zhTW:'以下為所有住宿者填寫的資訊，請確認內容是否正確。'},
@@ -1257,7 +1432,7 @@ function refreshUploadTexts(){
     const sEl = slot.querySelector('.meta .s');
     if(!sEl) return;
     if(slot.classList.contains('filled')){
-      sEl.textContent = t('uploadedStatus');
+      sEl.textContent = t('uploadedStatus') + (slot.dataset.filename ? '：' + slot.dataset.filename : '');
     } else if(slot.dataset.subKey){
       sEl.textContent = t(slot.dataset.subKey);
     }
@@ -1315,13 +1490,45 @@ function setLang(lang){
 // "today's check-in, not yet checked out" on its own (see chat discussion).
 const ARRIVAL_MODE = new URLSearchParams(location.search).get('mode') === 'arrival';
 
-function selectLang(lang){
+async function loadTodayReservation(){
+  try{
+    const res = await fetch(GAS_URL + '?action=today');
+    const data = await res.json();
+    if(data.success && data.found){
+      serverGuestData = data;
+      return true;
+    }
+    return false;
+  } catch(err){
+    console.error(err);
+    return false;
+  }
+}
+
+async function selectLang(lang){
   setLang(lang);
+
+  if(ARRIVAL_MODE){
+    document.querySelectorAll('.langbtn').forEach(b=>{ b.disabled = true; });
+    const loadingEl = document.getElementById('langGateLoading');
+    if(loadingEl){ loadingEl.textContent = t('loadingReservation'); loadingEl.style.display = 'block'; }
+
+    const found = await loadTodayReservation();
+
+    document.getElementById('langGate').style.display = 'none';
+    document.getElementById('mainFlow').style.display = 'block';
+    goStep(4);
+
+    if(!found){
+      document.getElementById('faceAuthSection').style.display = 'none';
+      const el = document.getElementById('dayReviewSummary');
+      if(el) el.innerHTML = '<div class="banner banner-error" style="display:flex;"><span>⚠</span><div>' + t('noReservationFound') + '</div></div>';
+    }
+    return;
+  }
+
   document.getElementById('langGate').style.display = 'none';
   document.getElementById('mainFlow').style.display = 'block';
-  if(ARRIVAL_MODE){
-    goStep(4);
-  }
 }
 
 function showLangGate(){
@@ -1340,6 +1547,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
     document.querySelectorAll('.step[data-go="1"], .step[data-go="2"], .step[data-go="3"]').forEach(s=>{
       s.style.display = 'none';
     });
+  } else {
+    // hide the arrival-day step during the pre-arrival flow; it's only reached
+    // via the door QR (?mode=arrival), not by browsing ahead during input
+    document.querySelector('.step[data-go="4"]').style.display = 'none';
   }
 });
 
