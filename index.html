@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>特区民泊 チェックインシステム | 画面イメージ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink-900:#16233a;
+    --ink-800:#1c2c46;
+    --ink-700:#24384f;
+    --paper:#eeeee5;
+    --paper-card:#f8f7f2;
+    --brass:#b8874e;
+    --brass-dark:#8f6535;
+    --stamp-red:#a8443c;
+    --success:#3f7a63;
+    --text:#1b2430;
+    --muted:#6e7a82;
+    --line:#d8d4c6;
+    --danger:#a8443c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 10% -10%, #1e2f4a 0%, transparent 60%),
+      var(--paper);
+    color:var(--text);
+    font-family:"Noto Sans JP","Noto Sans KR","Noto Sans SC","Noto Sans TC", sans-serif;
+    min-height:100vh;
+    padding:32px 16px 80px;
+  }
+  .mono{font-family:"JetBrains Mono", monospace;}
+  .serif{font-family:"Shippori Mincho", serif;}
+
+  .app{
+    max-width:640px;
+    margin:0 auto;
+  }
+
+  /* ---------- Header ---------- */
+  .brandbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:22px;
+    padding:0 4px;
+  }
+  .brandleft{display:flex;align-items:center;gap:12px;}
+  .langswitch{
+    background:#fff;
+    border:1.5px solid var(--line);
+    border-radius:20px;
+    padding:7px 14px;
+    font-size:12px;font-weight:700;
+    color:var(--ink-700);
+    font-family:inherit;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .langswitch:hover{border-color:var(--brass);}
+
+  /* ---------- Language gate ---------- */
+  .langgate-card{
+    background:var(--paper-card);
+    border-radius:14px;
+    box-shadow:0 18px 40px -18px rgba(22,35,58,.35);
+    border:1px solid var(--line);
+    padding:36px 26px 30px;
+    text-align:center;
+  }
+  .langgate-mark{
+    width:52px;height:52px;border-radius:13px;
+    background:var(--ink-900);
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto 20px;
+  }
+  .langgate-mark svg{width:26px;height:26px;}
+  .langgate-title{
+    font-family:"Shippori Mincho",serif;
+    font-size:16px;font-weight:700;color:var(--ink-900);
+    line-height:1.9;
+    margin:0 0 26px;
+  }
+  .langlist{display:flex;flex-direction:column;gap:10px;}
+  .langbtn{
+    display:flex;align-items:center;justify-content:center;
+    padding:14px 16px;
+    border-radius:11px;
+    border:1.5px solid var(--line);
+    background:#fff;
+    font-family:inherit;
+    font-size:15px;font-weight:700;
+    color:var(--text);
+    cursor:pointer;
+    transition:border-color .15s, background .15s, transform .1s;
+  }
+  .langbtn:hover{border-color:var(--brass);background:#fbf3e8;}
+  .langbtn:active{transform:scale(.98);}
+  .brandmark{
+    width:38px;height:38px;border-radius:9px;
+    background:var(--ink-900);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .brandmark svg{width:20px;height:20px;}
+  .brandtext .eyebrow{
+    font-size:11px;letter-spacing:.14em;color:var(--muted);
+    font-weight:700;
+  }
+  .brandtext .title{
+    font-family:"Shippori Mincho",serif;
+    font-size:19px;font-weight:700;color:var(--ink-900);
+    letter-spacing:.02em;
+  }
+
+  /* ---------- Ticket progress ---------- */
+  .ticket-strip{
+    display:flex;
+    background:var(--ink-900);
+    border-radius:14px 14px 0 0;
+    position:relative;
+    overflow:hidden;
+  }
+  .ticket-strip::after{
+    content:"";
+    position:absolute;
+    left:0;right:0;bottom:0;
+    height:0;
+    border-bottom:2px dashed rgba(255,255,255,.14);
+  }
+  .step{
+    flex:1;
+    padding:14px 6px 12px;
+    text-align:center;
+    position:relative;
+    cursor:pointer;
+    color:rgba(255,255,255,.42);
+    transition:color .25s;
+  }
+  .step + .step::before{
+    content:"";
+    position:absolute;left:0;top:16px;bottom:16px;
+    width:1px;background:rgba(255,255,255,.12);
+  }
+  .step .num{
+    display:block;
+    font-family:"JetBrains Mono",monospace;
+    font-size:11px;
+    letter-spacing:.08em;
+    margin-bottom:3px;
+  }
+  .step .label{
+    display:block;
+    font-size:12.5px;
+    font-weight:700;
+  }
+  .step.active{color:#fff;}
+  .step.active .num{color:var(--brass);}
+  .step.done{color:rgba(255,255,255,.78);}
+  .step .stampdot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:var(--brass);margin-right:4px;
+    vertical-align:middle;
+  }
+
+  /* ---------- Card ---------- */
+  .card{
+    background:var(--paper-card);
+    border-radius:0 0 14px 14px;
+    box-shadow:0 18px 40px -18px rgba(22,35,58,.35);
+    border:1px solid var(--line);
+    border-top:none;
+    position:relative;
+  }
+  .perf{
+    position:relative;
+    height:0;
+  }
+  .card-inner{
+    padding:26px 24px 28px;
+  }
+  .screen{display:none;}
+  .screen.active{display:block;animation:fadein .35s ease;}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  h2.scr-title{
+    font-family:"Shippori Mincho",serif;
+    font-size:20px;
+    margin:0 0 4px;
+    color:var(--ink-900);
+  }
+  p.scr-sub{
+    margin:0 0 22px;
+    font-size:13px;
+    color:var(--muted);
+    line-height:1.7;
+  }
+  .section{margin-bottom:26px;}
+  .section-head{
+    display:flex;align-items:baseline;gap:8px;
+    margin-bottom:12px;
+    padding-bottom:6px;
+    border-bottom:1px solid var(--line);
+  }
+  .section-head .tag{
+    font-family:"JetBrains Mono",monospace;
+    font-size:10px;color:var(--brass-dark);
+    letter-spacing:.06em;
+    border:1px solid var(--brass);
+    border-radius:20px;
+    padding:2px 8px;
+  }
+  .section-head h3{
+    margin:0;font-size:14.5px;font-weight:700;color:var(--ink-900);
+  }
+
+  label{
+    display:block;
+    font-size:12.5px;
+    font-weight:700;
+    color:var(--ink-700);
+    margin-bottom:6px;
+  }
+  .req::after{
+    content:" 必須";
+    font-size:10px;
+    color:#fff;
+    background:var(--stamp-red);
+    border-radius:4px;
+    padding:1px 5px;
+    margin-left:6px;
+    font-weight:700;
+    vertical-align:middle;
+  }
+  .field{margin-bottom:16px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  input[type=text],input[type=tel],input[type=email],input[type=number],select{
+    width:100%;
+    padding:11px 12px;
+    border:1.5px solid var(--line);
+    border-radius:9px;
+    background:#fff;
+    font-size:14px;
+    font-family:inherit;
+    color:var(--text);
+    outline:none;
+    transition:border-color .15s;
+  }
+  input:focus,select:focus{border-color:var(--brass);}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:5px;}
+
+  .radiogroup{display:flex;gap:10px;flex-wrap:wrap;}
+  .radiogroup label.opt{
+    flex:1;
+    min-width:150px;
+    display:flex;align-items:center;gap:8px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    padding:12px 12px;
+    font-weight:500;
+    font-size:13px;
+    color:var(--text);
+    cursor:pointer;
+    background:#fff;
+  }
+  .radiogroup input{width:15px;height:15px;accent-color:var(--brass-dark);}
+  .radiogroup label.opt.checked{
+    border-color:var(--brass);
+    background:#fbf3e8;
+  }
+
+  .upload-slot{
+    border:1.5px dashed var(--line);
+    border-radius:11px;
+    padding:16px;
+    background:#fff;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:10px;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .upload-slot:hover{border-color:var(--brass);background:#fefaf4;}
+  .upload-slot.filled{border-style:solid;border-color:var(--success);background:#f2f8f5;}
+  .upload-slot .icon{
+    width:38px;height:38px;border-radius:8px;
+    background:var(--ink-900);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .upload-slot .icon svg{width:18px;height:18px;}
+  .upload-slot.filled .icon{background:var(--success);}
+  .upload-slot .meta .t{font-size:13px;font-weight:700;color:var(--text);}
+  .upload-slot .meta .s{font-size:11.5px;color:var(--muted);margin-top:2px;}
+
+  .guestcard{
+    border:1px solid var(--line);
+    border-radius:11px;
+    padding:14px 14px 4px;
+    background:#fff;
+    margin-bottom:12px;
+  }
+  .guestcard .ghead{
+    display:flex;justify-content:space-between;align-items:center;
+    flex-wrap:wrap;gap:6px 10px;
+    margin-bottom:10px;
+  }
+  .ghead .gname{font-size:12.5px;font-weight:800;color:var(--brass-dark);}
+  .samewrap{
+    display:flex;align-items:center;gap:7px;
+    font-size:12.5px;font-weight:500;color:var(--ink-700);
+    margin-bottom:8px;cursor:pointer;
+  }
+  .samewrap input{width:15px;height:15px;accent-color:var(--brass-dark);}
+  .guestcard input[disabled]{
+    background:#f1efe6;color:var(--muted);
+  }
+  .addr-copy-disp{
+    font-size:12.5px;
+    color:var(--ink-700);
+    background:#f1efe6;
+    border:1px dashed var(--line);
+    border-radius:8px;
+    padding:9px 11px;
+    margin-bottom:4px;
+  }
+  .ziprow{display:flex;gap:8px;}
+  .ziprow input{flex:1;}
+  .zipbtn{
+    flex-shrink:0;
+    padding:0 14px;
+    border-radius:9px;
+    border:1.5px solid var(--brass);
+    background:#fbf3e8;
+    color:var(--brass-dark);
+    font-size:12.5px;font-weight:700;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .zipbtn:hover{background:var(--brass);color:#fff;}
+  .zipstatus{font-size:11px;margin-top:6px;min-height:14px;line-height:1.5;}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:13px 20px;
+    border-radius:10px;
+    border:none;
+    font-size:14.5px;
+    font-weight:700;
+    cursor:pointer;
+    font-family:inherit;
+    transition:transform .12s, box-shadow .12s, opacity .15s;
+    width:100%;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn-primary{background:var(--ink-900);color:#fff;}
+  .btn-primary:hover{box-shadow:0 8px 18px -8px rgba(22,35,58,.5);}
+  .btn-brass{background:var(--brass);color:#22160a;}
+  .btn-brass:hover{box-shadow:0 8px 18px -8px rgba(184,135,78,.6);}
+  .btn-ghost{background:transparent;color:var(--ink-700);border:1.5px solid var(--line);}
+  .btn[disabled]{opacity:.4;cursor:not-allowed;}
+  .btnrow{display:flex;gap:10px;margin-top:22px;}
+
+  .banner{
+    display:flex;gap:10px;
+    background:#fdf6ec;
+    border:1px solid #ecd9b8;
+    border-radius:10px;
+    padding:12px 13px;
+    font-size:12.5px;
+    color:#6b4d1e;
+    line-height:1.6;
+    margin-bottom:20px;
+  }
+  .banner b{color:var(--brass-dark);}
+  .banner-error{
+    background:#fbebe9;
+    border-color:#e3b3ac;
+    color:#7a2c25;
+  }
+  .banner-error b{color:var(--stamp-red);}
+
+  /* ---------- Confirmation ---------- */
+  .summary-row{
+    display:flex;justify-content:space-between;
+    padding:9px 0;
+    border-bottom:1px dashed var(--line);
+    font-size:13px;
+  }
+  .summary-row:last-child{border-bottom:none;}
+  .summary-row .k{color:var(--muted);}
+  .summary-row .v{font-weight:700;color:var(--text);text-align:right;}
+
+  /* ---------- Face auth status stamp (embedded in guest card) ---------- */
+  .gstamp{
+    font-size:10px;font-weight:800;
+    padding:3px 10px;
+    border-radius:20px;
+    white-space:nowrap;
+    flex-shrink:0;
+    letter-spacing:.02em;
+  }
+  .gstamp-pending{
+    background:#f1efe6;color:var(--muted);
+    border:1px dashed var(--line);
+  }
+  .gstamp-current{
+    background:#fbf3e8;color:var(--brass-dark);
+    border:1px solid var(--brass);
+  }
+  .gstamp-done{
+    background:transparent;
+    color:var(--stamp-red);
+    border:2.5px solid var(--stamp-red);
+    font-family:"Shippori Mincho",serif;
+    font-size:13px;
+    font-weight:800;
+    padding:4px 14px;
+  }
+
+  .facequeue{
+    font-size:12.5px;font-weight:800;color:var(--brass-dark);
+    margin-bottom:10px;
+  }
+  .camframe{
+    width:100%;
+    aspect-ratio:4/3;
+    background:linear-gradient(160deg,#0f1a2c,#1c2c46);
+    border-radius:14px;
+    position:relative;
+    overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    margin-bottom:10px;
+  }
+  .camframe .guide{
+    width:56%;height:72%;
+    border:2.5px dashed rgba(184,135,78,.7);
+    border-radius:50% / 40%;
+    position:absolute;
+  }
+  .camframe .silhouette{
+    width:44%;
+    opacity:.55;
+  }
+  .camframe .flash{
+    position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;
+  }
+  .camframe .cap-badge{
+    position:absolute;top:10px;left:10px;
+    background:rgba(0,0,0,.4);
+    color:#fff;font-size:10.5px;font-family:"JetBrains Mono",monospace;
+    padding:4px 8px;border-radius:6px;
+    display:flex;align-items:center;gap:5px;
+  }
+  .cap-badge .dot{width:6px;height:6px;border-radius:50%;background:#e0554b;animation:blink 1.4s infinite;}
+  @keyframes blink{50%{opacity:.2;}}
+
+  .faceprogress{
+    height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin:16px 0 8px;
+  }
+  .faceprogress .bar{height:100%;width:0%;background:var(--brass);transition:width 1.4s ease;}
+  .facestatus{font-size:12.5px;color:var(--muted);text-align:center;}
+
+  .stamp{
+    width:104px;height:104px;
+    border:4px solid var(--stamp-red);
+    border-radius:50%;
+    color:var(--stamp-red);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+    margin:8px auto 16px;
+    transform:scale(0) rotate(-18deg);
+    opacity:0;
+    font-family:"Shippori Mincho",serif;
+  }
+  .stamp.show{
+    animation:stampin .5s cubic-bezier(.2,1.6,.4,1) forwards;
+  }
+  @keyframes stampin{
+    to{transform:scale(1) rotate(-8deg);opacity:.92;}
+  }
+  .stamp .s1{font-size:20px;font-weight:800;line-height:1;}
+  .stamp .s2{font-size:10px;letter-spacing:.1em;margin-top:3px;}
+
+  .center{text-align:center;}
+  .mt8{margin-top:8px;}
+  .small{font-size:11.5px;color:var(--muted);}
+
+  footer.note{
+    max-width:640px;margin:18px auto 0;
+    font-size:11.5px;color:var(--muted);
+    text-align:center;line-height:1.7;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="brandbar">
+    <div class="brandleft">
+      <div class="brandmark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 10.5L12 4l9 6.5" stroke="#f6f3ec" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9.5V19a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1V9.5" stroke="#f6f3ec" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="brandtext">
+        <div class="eyebrow" data-i18n="brandEyebrow"></div>
+        <div class="title" data-i18n="brandTitle"></div>
+      </div>
+    </div>
+    <button class="langswitch" onclick="showLangGate()" id="langSwitchBtn"></button>
+  </div>
+
+  <div class="langgate" id="langGate">
+    <div class="langgate-card">
+      <div class="langgate-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 10.5L12 4l9 6.5" stroke="#f6f3ec" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9.5V19a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1V9.5" stroke="#f6f3ec" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="langgate-title">言語を選択してください<br>Please select your language<br>언어를 선택해 주세요<br>请选择语言 ・ 請選擇語言</div>
+      <div class="langlist">
+        <button class="langbtn" onclick="selectLang('ja')">日本語</button>
+        <button class="langbtn" onclick="selectLang('en')">English</button>
+        <button class="langbtn" onclick="selectLang('ko')">한국어</button>
+        <button class="langbtn" onclick="selectLang('zhCN')">中文（简体）</button>
+        <button class="langbtn" onclick="selectLang('zhTW')">中文（繁體）</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mainFlow" style="display:none;">
+
+  <div class="ticket-strip" id="ticketStrip">
+    <div class="step active" data-go="1"><span class="num">01</span><span class="label" data-i18n="step1"></span></div>
+    <div class="step" data-go="2"><span class="num">02</span><span class="label" data-i18n="step2"></span></div>
+    <div class="step" data-go="3"><span class="num">03</span><span class="label" data-i18n="step3"></span></div>
+    <div class="step" data-go="4"><span class="num">04</span><span class="label" data-i18n="step4"></span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-inner">
+
+      <!-- ============ SCREEN 1 : 事前確認フォーム ============ -->
+      <div class="screen active" id="screen1">
+        <h2 class="scr-title" data-i18n="screen1Title"></h2>
+        <p class="scr-sub" data-i18n="screen1Sub"></p>
+
+        <div class="section">
+          <div class="section-head"><span class="tag">STEP 1-A</span><h3 data-i18n="stepATitle"></h3></div>
+          <div class="field">
+            <label class="req" data-i18n="stepATitle"></label>
+            <input type="number" min="1" value="2" id="guestCount" onchange="renderGuestCards()">
+            <div class="hint" data-i18n="guestCountHint"></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head"><span class="tag">STEP 1-B</span><h3 data-i18n="stepBTitle"></h3></div>
+          <div id="guestCardsWrap"></div>
+        </div>
+
+        <!-- 全員日本国籍の場合のみ表示：代表者の本人確認書類 -->
+        <div class="section" id="repIdBlock">
+          <div class="section-head"><span class="tag">STEP 1-C</span><h3 data-i18n="repIdTitle"></h3></div>
+          <div class="upload-slot" id="repIdUpload" data-sub-key="repIdUploadSub" onclick="mockUpload(this)">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div class="meta">
+              <div class="t" data-i18n="repIdUploadTitle"></div>
+              <div class="s" data-i18n="repIdUploadSub"></div>
+            </div>
+          </div>
+          <div class="hint" data-i18n="repIdHint"></div>
+        </div>
+
+        <div class="banner"><span>🛈</span><div><b data-i18n="bannerNoticeLabel"></b><span data-i18n="bannerNoticeText"></span></div></div>
+
+        <div class="banner banner-error" id="formError" style="display:none;"></div>
+
+        <button class="btn btn-primary" onclick="goConfirmClick()" data-i18n="btnConfirm"></button>
+      </div>
+
+      <!-- ============ SCREEN 2 : 内容確認 ============ -->
+      <div class="screen" id="screen2">
+        <h2 class="scr-title" id="screen2Title"></h2>
+        <p class="scr-sub" data-i18n="reviewSub"></p>
+
+        <div class="section">
+          <div class="section-head"><span class="tag" data-i18n="sectionConfirmTag"></span><h3 data-i18n="sectionGuestInfoTitle"></h3></div>
+          <div id="reviewSummary"></div>
+        </div>
+
+        <div class="banner"><span>🛈</span><div id="reviewBannerText"></div></div>
+
+        <div class="btnrow">
+          <button class="btn btn-ghost" onclick="goStep(1)" data-i18n="btnBack"></button>
+          <button class="btn btn-primary" id="sendOrReturnBtn"></button>
+        </div>
+      </div>
+
+      <!-- ============ SCREEN 3 : 送信完了・サンキュー ============ -->
+      <div class="screen" id="screen3">
+        <div class="center">
+          <div class="stamp show" style="position:static;"><div class="s1" data-i18n="stampThanksS1"></div><div class="s2">THANK YOU</div></div>
+          <h2 class="scr-title" data-i18n="screen3Title"></h2>
+          <p class="scr-sub" data-i18n="screen3Sub"></p>
+        </div>
+
+        <div class="section">
+          <div class="section-head"><span class="tag" data-i18n="guideSectionTag"></span><h3 data-i18n="guideSectionTitle"></h3></div>
+          <p class="scr-sub" style="margin-bottom:14px;" data-i18n="guideSub"></p>
+          <a class="btn btn-brass" href="house-guide.html" target="_blank" rel="noopener" style="text-decoration:none;" data-i18n="btnGuide"></a>
+        </div>
+
+        <button class="btn btn-ghost mt8" onclick="goStep(4)" data-i18n="btnDemoDay"></button>
+      </div>
+
+      <!-- ============ SCREEN 4 : チェックイン当日（ゲストのスマホで） ============ -->
+      <div class="screen" id="screen4">
+        <h2 class="scr-title" data-i18n="screen4Title"></h2>
+        <p class="scr-sub" data-i18n="screen4Sub"></p>
+
+        <div class="section">
+          <div class="section-head"><span class="tag" data-i18n="sectionConfirmTag"></span><h3 data-i18n="sectionGuestInfoTitle"></h3></div>
+          <div id="dayReviewSummary"></div>
+        </div>
+
+        <div class="banner"><span>🛈</span><div data-i18n="screen4Banner"></div></div>
+
+        <div class="section" id="faceAuthSection">
+          <div class="section-head"><span class="tag">STEP 4-A</span><h3 data-i18n="faceSectionTitle"></h3></div>
+          <div class="facequeue" id="faceQueueLabel"></div>
+          <div class="camframe" id="camframe">
+            <div class="cap-badge"><span class="dot"></span>LIVE</div>
+            <div class="guide"></div>
+            <svg class="silhouette" viewBox="0 0 100 120" fill="none"><circle cx="50" cy="38" r="26" stroke="#b8874e" stroke-width="2"/><path d="M10 118c4-30 26-46 40-46s36 16 40 46" stroke="#b8874e" stroke-width="2"/></svg>
+            <div class="flash" id="flash"></div>
+          </div>
+          <div class="hint" data-i18n="faceHint"></div>
+          <button class="btn btn-brass mt8" id="faceCaptureBtn" onclick="doFaceCapture()"></button>
+
+          <div id="faceMatchArea" style="display:none;">
+            <div class="faceprogress"><div class="bar" id="faceBar"></div></div>
+            <div class="facestatus" id="faceStatus"></div>
+            <div class="stamp" id="faceStamp"><div class="s1" data-i18n="faceStampS1"></div><div class="s2">VERIFIED</div></div>
+          </div>
+        </div>
+
+        <div id="stayConfirmArea" style="display:none;">
+          <button class="btn btn-primary" onclick="doStayConfirm()" data-i18n="btnStayConfirm"></button>
+        </div>
+
+        <div id="stayConfirmed" style="display:none;">
+          <div class="stamp" id="stayStamp"><div class="s1" data-i18n="stayStampS1"></div><div class="s2">CONFIRMED</div></div>
+          <div class="section">
+            <div class="summary-row"><div class="k" data-i18n="labelRoom"></div><div class="v">201号室</div></div>
+            <div class="summary-row"><div class="k">Wi-Fi SSID</div><div class="v mono">tokku-201</div></div>
+            <div class="summary-row"><div class="k" data-i18n="labelWifiPass"></div><div class="v mono">welcome201</div></div>
+            <div class="summary-row"><div class="k" data-i18n="labelCheckout"></div><div class="v" data-i18n="checkoutNote"></div></div>
+            <div class="summary-row"><div class="k" data-i18n="labelEmergency"></div><div class="v">090-XXXX-XXXX<span data-i18n="emergencyNote"></span></div></div>
+          </div>
+        </div>
+
+        <button class="btn btn-ghost mt8" onclick="goEditInfo()" data-i18n="btnEditInfo"></button>
+      </div>
+
+    </div>
+  </div>
+
+  </div>
+
+</div>
+
+<footer class="note" data-i18n="footerNote"></footer>
+
+<script>
+let editingFromDay4 = false;
+
+function goStep(n){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen'+n).classList.add('active');
+  document.querySelectorAll('.step').forEach(s=>{
+    const sn = parseInt(s.dataset.go);
+    s.classList.toggle('active', sn===n);
+    s.classList.toggle('done', sn<n);
+  });
+  if(n===2){ populateReview('reviewSummary'); updateSendButton(); }
+  if(n===4){ resetStayConfirm(); editingFromDay4 = false; }
+}
+document.querySelectorAll('.step').forEach(s=>{
+  s.addEventListener('click', ()=>goStep(parseInt(s.dataset.go)));
+});
+
+function goEditInfo(){
+  editingFromDay4 = true;
+  goStep(1);
+}
+
+function updateSendButton(){
+  const btn = document.getElementById('sendOrReturnBtn');
+  const bannerEl = document.getElementById('reviewBannerText');
+  if(editingFromDay4){
+    if(btn){ btn.textContent = t('btnReturnDay4'); btn.onclick = ()=>goStep(4); }
+    if(bannerEl) bannerEl.textContent = t('reviewBannerEdit');
+  } else {
+    if(btn){ btn.textContent = t('btnSendHost'); btn.onclick = ()=>goStep(3); }
+    if(bannerEl) bannerEl.textContent = t('reviewBanner');
+  }
+}
+
+// ---- guest cards (name/nationality/address for everyone, phone+email for rep only) ----
+const NAT_CODES = ['JP','VN','CN','KR','TW','US','OTHER'];
+
+// mock postal-code → address dataset, simulating a zip lookup API (e.g. zipcloud)
+const ZIP_MOCK = {
+  '8040067':'福岡県北九州市戸畑区中原西',
+  '8030812':'福岡県北九州市小倉北区京町',
+  '8020001':'福岡県北九州市小倉北区浅野',
+  '1000001':'東京都千代田区千代田',
+  '5300001':'大阪府大阪市北区梅田',
+  '0600001':'北海道札幌市中央区北一条西'
+};
+
+function ageOptionsHTML(){
+  let opts = `<option value="">${t('ageSelectPlaceholder')}</option>`;
+  for(let a=0;a<=100;a++){
+    const label = LANG === 'en' ? String(a) : (a + t('ageUnit'));
+    opts += `<option value="${a}">${label}</option>`;
+  }
+  return opts;
+}
+
+function natOptionsHTML(){
+  return NAT_CODES.map(c=>`<option value="${c}">${natLabel(c)}</option>`).join('');
+}
+
+function guestCardHTML(i){
+  const isRep = i===1;
+  const addressBlock = isRep ? `
+        <div class="field" id="zipblock-1">
+          <label class="req" data-i18n="labelZip"></label>
+          <div class="ziprow">
+            <input type="text" class="g-zip" id="zip-1" placeholder="804-0067" maxlength="8" oninput="onZipInput(1)">
+            <button type="button" class="zipbtn" onclick="onZipInput(1)" data-i18n="btnZipSearch"></button>
+          </div>
+          <div class="zipstatus" id="zipstatus-1"></div>
+        </div>
+        <div class="field"><label class="req" data-i18n="labelAddr"></label><input type="text" class="g-addr" id="addr-1" oninput="syncAddress()" data-i18n-ph="placeholderAddr"></div>
+        <div class="row2">
+          <div class="field"><label class="req" data-i18n="labelPhone"></label><input type="tel" id="repPhone" placeholder="090-0000-0000"></div>
+          <div class="field"><label class="req" data-i18n="labelEmail"></label><input type="email" id="repEmail" placeholder="you@example.com"></div>
+        </div>` : `
+        <label class="samewrap"><input type="checkbox" class="g-same" checked onchange="toggleSameAddr(${i})"> <span data-i18n="sameAddrCheckbox"></span></label>
+        <div class="addr-copy-disp" id="addrDisp-${i}"></div>
+        <div class="ownaddr" id="ownaddr-${i}" style="display:none;">
+          <div class="field" id="zipblock-${i}">
+            <label class="req" data-i18n="labelZip"></label>
+            <div class="ziprow">
+              <input type="text" class="g-zip" id="zip-${i}" placeholder="804-0067" maxlength="8" oninput="onZipInput(${i})">
+              <button type="button" class="zipbtn" onclick="onZipInput(${i})" data-i18n="btnZipSearch"></button>
+            </div>
+            <div class="zipstatus" id="zipstatus-${i}"></div>
+          </div>
+          <div class="field"><label class="req" data-i18n="labelAddr"></label><input type="text" class="g-addr" id="addr-${i}" data-i18n-ph="placeholderAddr"></div>
+        </div>`;
+  return `
+    <div class="guestcard" data-guest="${i}">
+      <div class="ghead"><span class="gname" data-gnum="${i}" data-rep="${isRep?1:0}"></span></div>
+
+      <div class="field"><label class="req" data-i18n="labelName"></label><input type="text" class="g-name" data-i18n-ph="placeholderName"></div>
+
+      <div class="row2">
+        <div class="field"><label class="req" data-i18n="labelAge"></label>
+          <select class="g-age">${ageOptionsHTML()}</select>
+        </div>
+        <div class="field"><label class="req" data-i18n="labelNat"></label>
+          <select class="g-nat" onchange="onNatChange(${i})">${natOptionsHTML()}</select>
+        </div>
+      </div>
+
+      <div class="field g-passport" style="display:none;">
+        <label class="req" data-i18n="labelPassport"></label><input type="text" class="g-passno" placeholder="N1234567">
+        <div class="upload-slot mt8" id="passportUpload-${i}" data-sub-key="passportUploadSub" onclick="mockUpload(this)">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="meta"><div class="t" data-i18n="passportUploadTitle"></div><div class="s" data-i18n="passportUploadSub"></div></div>
+        </div>
+      </div>
+
+      ${addressBlock}
+    </div>`;
+}
+
+function renderGuestCards(){
+  const n = Math.max(1, parseInt(document.getElementById('guestCount').value)||1);
+  const wrap = document.getElementById('guestCardsWrap');
+  wrap.innerHTML='';
+  for(let i=1;i<=n;i++){ wrap.insertAdjacentHTML('beforeend', guestCardHTML(i)); }
+  syncAddress();
+  updateDocRequirement();
+  applyI18n();
+}
+
+function toggleSameAddr(i){
+  const same = document.querySelector(`#guestCardsWrap .guestcard[data-guest="${i}"] .g-same`).checked;
+  document.getElementById('addrDisp-'+i).style.display = same ? 'block':'none';
+  document.getElementById('ownaddr-'+i).style.display = same ? 'none':'block';
+  if(same) syncAddress();
+}
+
+function syncAddress(){
+  const repAddr = document.getElementById('addr-1').value;
+  document.querySelectorAll('#guestCardsWrap .guestcard').forEach(card=>{
+    if(card.dataset.guest==='1') return;
+    const sameBox = card.querySelector('.g-same');
+    if(sameBox && sameBox.checked){
+      const disp = card.querySelector('.addr-copy-disp');
+      if(disp) disp.textContent = repAddr ? repAddr : t('addrCopyPlaceholder');
+    }
+  });
+}
+
+function onZipInput(i){
+  const zipEl = document.getElementById('zip-'+i);
+  const statusEl = document.getElementById('zipstatus-'+i);
+  const addrEl = document.getElementById('addr-'+i);
+  const digits = zipEl.value.replace(/[^0-9]/g,'');
+  // auto-format as 000-0000
+  zipEl.value = digits.length>3 ? digits.slice(0,3)+'-'+digits.slice(3,7) : digits;
+  if(digits.length!==7){ statusEl.textContent=''; return; }
+  statusEl.textContent=t('zipSearching');
+  statusEl.style.color='var(--muted)';
+  setTimeout(()=>{
+    const hit = ZIP_MOCK[digits];
+    if(hit){
+      addrEl.value = hit + ' ';
+      statusEl.textContent = t('zipFound', {addr: hit});
+      statusEl.style.color='var(--success)';
+    } else {
+      statusEl.textContent = t('zipNotFound');
+      statusEl.style.color='var(--danger)';
+    }
+    if(i===1) syncAddress();
+  }, 400);
+}
+
+function onNatChange(i){
+  const card = document.querySelector(`#guestCardsWrap .guestcard[data-guest="${i}"]`);
+  const isJp = card.querySelector('.g-nat').value === 'JP';
+  card.querySelector('.g-passport').style.display = isJp ? 'none' : 'block';
+  const zipblock = document.getElementById('zipblock-'+i);
+  if(zipblock) zipblock.style.display = isJp ? 'block' : 'none';
+  updateDocRequirement();
+}
+
+function updateDocRequirement(){
+  const allJp = [...document.querySelectorAll('.g-nat')].every(s=>s.value==='JP');
+  document.getElementById('repIdBlock').style.display = allJp ? 'block' : 'none';
+}
+
+function validateForm(){
+  const errors = [];
+  document.querySelectorAll('#guestCardsWrap .guestcard').forEach(card=>{
+    const gnum = card.dataset.guest;
+    const isRep = gnum === '1';
+    const label = guestLabel(gnum, isRep);
+
+    const name = (card.querySelector('.g-name').value || '').trim();
+    if(!name) errors.push(t('errName', {label}));
+
+    const age = (card.querySelector('.g-age').value || '').trim();
+    if(!age) errors.push(t('errAge', {label}));
+
+    const nat = card.querySelector('.g-nat').value;
+    if(nat !== 'JP'){
+      const passno = (card.querySelector('.g-passno').value || '').trim();
+      if(!passno) errors.push(t('errPassport', {label}));
+    }
+
+    if(isRep){
+      if(!(document.getElementById('addr-1').value || '').trim()) errors.push(t('errRepAddr'));
+      if(!(document.getElementById('repPhone').value || '').trim()) errors.push(t('errRepPhone'));
+      if(!(document.getElementById('repEmail').value || '').trim()) errors.push(t('errRepEmail'));
+    } else {
+      const sameBox = card.querySelector('.g-same');
+      if(sameBox && !sameBox.checked){
+        const own = document.getElementById('addr-'+gnum);
+        if(!((own ? own.value : '').trim())) errors.push(t('errGuestAddr', {label}));
+      }
+    }
+  });
+  return errors;
+}
+
+function validateDocs(){
+  const cards = [...document.querySelectorAll('#guestCardsWrap .guestcard')];
+  const foreignCards = cards.filter(c => c.querySelector('.g-nat').value !== 'JP');
+  const errors = [];
+  if(foreignCards.length === 0){
+    const repUpload = document.getElementById('repIdUpload');
+    if(!repUpload.classList.contains('filled')){
+      errors.push(t('errRepDoc'));
+    }
+  } else {
+    foreignCards.forEach(c=>{
+      const gnum = c.dataset.guest;
+      const slot = document.getElementById('passportUpload-'+gnum);
+      if(!slot.classList.contains('filled')){
+        const gname = (c.querySelector('.g-name').value || '').trim() || guestLabel(gnum, false);
+        errors.push(t('errPassportDoc', {name: gname}));
+      }
+    });
+  }
+  return errors;
+}
+
+function goConfirmClick(){
+  const errors = [...validateForm(), ...validateDocs()];
+  const errEl = document.getElementById('formError');
+  if(errors.length){
+    errEl.innerHTML = '<span>⚠</span><div><b>' + t('errorBannerPrefix') + '</b><br>' + errors.join('<br>') + '</div>';
+    errEl.style.display = 'flex';
+    errEl.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+  errEl.style.display = 'none';
+  goStep(2);
+}
+
+function guestAddress(card){
+  const gnum = card.dataset.guest;
+  if(gnum === '1'){
+    return (document.getElementById('addr-1').value || '').trim() || t('notEntered');
+  }
+  const sameBox = card.querySelector('.g-same');
+  if(sameBox && sameBox.checked){
+    return (document.getElementById('addr-1').value || '').trim() || t('notEntered');
+  }
+  const own = document.getElementById('addr-'+gnum);
+  return (own ? own.value : '').trim() || t('notEntered');
+}
+
+function populateReview(targetId){
+  const cards = [...document.querySelectorAll('#guestCardsWrap .guestcard')];
+  const repCard = cards.find(c => c.dataset.guest === '1');
+  const repName = (repCard.querySelector('.g-name').value || '').trim() || t('repGuestLabel');
+  const titleEl = document.getElementById('screen2Title');
+  if(titleEl) titleEl.textContent = t('reviewTitle', {name: repName});
+
+  const withStatus = targetId === 'dayReviewSummary';
+
+  const blocks = cards.map(card=>{
+    const gnum = card.dataset.guest;
+    const isRep = gnum === '1';
+    const name = (card.querySelector('.g-name').value || '').trim() || guestLabel(gnum, isRep);
+    const age = (card.querySelector('.g-age').value || '').trim();
+    const ageDisp = age ? (LANG === 'en' ? age : (age + t('ageUnit'))) : t('notEntered');
+    const nat = card.querySelector('.g-nat').value;
+    const addr = guestAddress(card);
+
+    let rows = `
+      <div class="summary-row"><div class="k">${t('labelName')}</div><div class="v">${name}</div></div>
+      <div class="summary-row"><div class="k">${t('labelAge')}</div><div class="v">${ageDisp}</div></div>
+      <div class="summary-row"><div class="k">${t('labelNat')}</div><div class="v">${natLabel(nat)}</div></div>
+      <div class="summary-row"><div class="k">${t('labelAddr')}</div><div class="v">${addr}</div></div>`;
+
+    if(nat !== 'JP'){
+      const passno = (card.querySelector('.g-passno').value || '').trim() || t('notEntered');
+      rows += `<div class="summary-row"><div class="k">${t('labelPassport')}</div><div class="v">${passno}</div></div>`;
+    }
+    if(isRep){
+      const phone = (document.getElementById('repPhone').value || '').trim() || t('notEntered');
+      const email = (document.getElementById('repEmail').value || '').trim() || t('notEntered');
+      rows += `
+        <div class="summary-row"><div class="k">${t('labelPhone')}</div><div class="v">${phone}</div></div>
+        <div class="summary-row"><div class="k">${t('labelEmail')}</div><div class="v">${email}</div></div>`;
+    }
+
+    return `<div class="guestcard">
+      <div class="ghead"><span class="gname">${guestLabel(gnum, isRep)}</span>${withStatus ? faceStampHTML(gnum) : ''}</div>
+      ${rows}
+    </div>`;
+  });
+
+  document.getElementById(targetId).innerHTML = blocks.join('');
+}
+
+function mockUpload(el){
+  el.classList.add('filled');
+  const sEl = el.querySelector('.meta .s');
+  sEl.textContent = t('uploadedStatus');
+  el.querySelector('.icon').innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+// day-of arrival: guest self-checks their info, completes face auth one guest at a time, then confirms the stay
+let dayGuestQueue = [];
+let dayGuestIndex = 0;
+
+function faceStatusFor(gnum){
+  const idx = dayGuestQueue.findIndex(g => g.gnum === gnum);
+  if(idx === -1) return null;
+  if(idx < dayGuestIndex) return 'done';
+  if(idx === dayGuestIndex) return 'current';
+  return 'pending';
+}
+
+function faceStampHTML(gnum){
+  const status = faceStatusFor(gnum);
+  if(!status) return '';
+  const key = status === 'done' ? 'faceStatusDone' : status === 'current' ? 'faceStatusCurrent' : 'faceStatusPending';
+  return `<span class="gstamp gstamp-${status}">${t(key)}</span>`;
+}
+
+function buildDayGuestQueue(){
+  const cards = [...document.querySelectorAll('#guestCardsWrap .guestcard')];
+  dayGuestQueue = cards.map(card=>{
+    const gnum = card.dataset.guest;
+    const isRep = gnum === '1';
+    const name = (card.querySelector('.g-name').value || '').trim() || guestLabel(gnum, isRep);
+    return { gnum, name, isRep };
+  });
+  dayGuestIndex = 0;
+}
+
+function resetStayConfirm(){
+  document.getElementById('stayConfirmArea').style.display = 'none';
+  document.getElementById('stayConfirmed').style.display = 'none';
+  document.getElementById('stayStamp').classList.remove('show');
+
+  buildDayGuestQueue();
+  document.getElementById('faceAuthSection').style.display = 'block';
+  renderFaceStep();
+}
+
+function renderFaceStep(){
+  const total = dayGuestQueue.length;
+  const cur = dayGuestQueue[dayGuestIndex];
+  document.getElementById('faceQueueLabel').textContent = t('faceQueueLabel', {n: dayGuestIndex + 1, total, name: cur.name});
+  document.getElementById('faceMatchArea').style.display = 'none';
+  document.getElementById('faceStamp').classList.remove('show');
+  const btn = document.getElementById('faceCaptureBtn');
+  btn.removeAttribute('disabled');
+  btn.textContent = t('faceCaptureBtn', {name: cur.name});
+  populateReview('dayReviewSummary');
+}
+
+function relabelFaceStep(){
+  if(!dayGuestQueue.length) return;
+  const cur = dayGuestQueue[dayGuestIndex];
+  if(!cur) return;
+  const total = dayGuestQueue.length;
+  const label = document.getElementById('faceQueueLabel');
+  if(label) label.textContent = t('faceQueueLabel', {n: dayGuestIndex + 1, total, name: cur.name});
+  const btn = document.getElementById('faceCaptureBtn');
+  if(btn && !btn.hasAttribute('disabled')) btn.textContent = t('faceCaptureBtn', {name: cur.name});
+  populateReview('dayReviewSummary');
+}
+
+function doFaceCapture(){
+  const flash = document.getElementById('flash');
+  flash.style.transition = 'none'; flash.style.opacity = '.9';
+  requestAnimationFrame(()=>{
+    flash.style.transition = 'opacity .4s';
+    flash.style.opacity = '0';
+  });
+  const btn = document.getElementById('faceCaptureBtn');
+  btn.setAttribute('disabled','true');
+  btn.textContent = t('faceCaptureDone');
+  setTimeout(()=>{
+    document.getElementById('faceMatchArea').style.display = 'block';
+    startFaceMatch();
+  }, 400);
+}
+
+function startFaceMatch(){
+  const bar = document.getElementById('faceBar');
+  const status = document.getElementById('faceStatus');
+  const cur = dayGuestQueue[dayGuestIndex];
+  bar.style.transition = 'none'; bar.style.width = '0%';
+  status.textContent = t('faceMatching', {name: cur.name});
+  requestAnimationFrame(()=>{
+    bar.style.transition = 'width 1.4s ease';
+    requestAnimationFrame(()=>{ bar.style.width = '100%'; });
+  });
+  setTimeout(()=>{
+    status.textContent = t('faceMatched', {name: cur.name});
+    document.getElementById('faceStamp').classList.add('show');
+    setTimeout(()=>{
+      dayGuestIndex++;
+      populateReview('dayReviewSummary');
+      if(dayGuestIndex < dayGuestQueue.length){
+        renderFaceStep();
+      } else {
+        document.getElementById('faceAuthSection').style.display = 'none';
+        document.getElementById('stayConfirmArea').style.display = 'block';
+      }
+    }, 700);
+  }, 1600);
+}
+
+function doStayConfirm(){
+  document.getElementById('stayConfirmArea').style.display = 'none';
+  document.getElementById('stayConfirmed').style.display = 'block';
+  requestAnimationFrame(()=>{
+    document.getElementById('stayStamp').classList.add('show');
+  });
+}
+
+// ==================== i18n ====================
+let LANG = 'ja';
+
+const NAT_I18N = {
+  JP:    {ja:'日本',     en:'Japan',         ko:'일본',   zhCN:'日本', zhTW:'日本'},
+  VN:    {ja:'ベトナム', en:'Vietnam',       ko:'베트남', zhCN:'越南', zhTW:'越南'},
+  CN:    {ja:'中国',     en:'China',         ko:'중국',   zhCN:'中国', zhTW:'中國'},
+  KR:    {ja:'韓国',     en:'South Korea',  ko:'한국',   zhCN:'韩国', zhTW:'韓國'},
+  TW:    {ja:'台湾',     en:'Taiwan',        ko:'대만',   zhCN:'台湾', zhTW:'台灣'},
+  US:    {ja:'アメリカ', en:'United States', ko:'미국',   zhCN:'美国', zhTW:'美國'},
+  OTHER: {ja:'その他',   en:'Other',         ko:'기타',   zhCN:'其他', zhTW:'其他'}
+};
+function natLabel(code){
+  const e = NAT_I18N[code];
+  if(!e) return code;
+  return e[LANG] || e.ja;
+}
+function guestLabel(gnum, isRep){
+  return isRep ? t('repGuestLabel') : t('guestLabelN', {n: gnum});
+}
+
+const I18N = {
+  brandEyebrow: {ja:'北九州市 国家戦略特別区域外国人滞在施設経営事業', en:'Kitakyushu City National Strategic Special Zone Accommodation Business', ko:'기타큐슈시 국가전략특구 외국인 숙박시설 경영사업', zhCN:'北九州市 国家战略特区外国人住宿设施经营事业', zhTW:'北九州市 國家戰略特區外國人住宿設施經營事業'},
+  brandTitle: {ja:'特区民泊 チェックインシステム', en:'Special Zone Minpaku Check-in System', ko:'특구 민박 체크인 시스템', zhCN:'特区民宿 入住系统', zhTW:'特區民宿 入住系統'},
+
+  step1: {ja:'情報入力', en:'Guest Info', ko:'정보 입력', zhCN:'信息填写', zhTW:'資訊填寫'},
+  step2: {ja:'内容確認', en:'Review', ko:'내용 확인', zhCN:'内容确认', zhTW:'內容確認'},
+  step3: {ja:'送信完了', en:'Submitted', ko:'제출 완료', zhCN:'提交完成', zhTW:'提交完成'},
+  step4: {ja:'当日確認', en:'Arrival Day', ko:'당일 확인', zhCN:'入住当天确认', zhTW:'入住當天確認'},
+
+  screen1Title: {ja:'滞在前 本人確認フォーム', en:'Pre-Arrival ID Verification Form', ko:'숙박 전 본인 확인 양식', zhCN:'入住前身份确认表', zhTW:'入住前身份確認表'},
+  screen1Sub: {ja:'チェックイン日の3日前までにご入力ください。ご入力内容は宿泊者名簿として法令に基づき保管されます。', en:'Please complete this at least 3 days before check-in. Your information will be kept on file as required by law.', ko:'체크인 3일 전까지 입력해 주세요. 입력하신 내용은 법령에 따라 숙박자 명부로 보관됩니다.', zhCN:'请在入住日3天前完成填写。您填写的信息将依法作为住宿者名册留存。', zhTW:'請於入住日3天前完成填寫。您填寫的資訊將依法作為住宿者名冊留存。'},
+  stepATitle: {ja:'宿泊人数', en:'Number of Guests', ko:'숙박 인원', zhCN:'入住人数', zhTW:'入住人數'},
+  guestCountHint: {ja:'住所・氏名等はご宿泊者全員分が必要です。ご家族など住所が同じ場合はワンタップでコピーできます。', en:'Address and name are required for every guest. If a family shares the same address, you can copy it with one tap.', ko:'주소·성명 등은 모든 숙박자 정보가 필요합니다. 가족 등 주소가 같은 경우 한 번의 탭으로 복사할 수 있습니다.', zhCN:'住址、姓名等需填写所有住宿者的信息。家人等住址相同时可一键复制。', zhTW:'住址、姓名等需填寫所有住宿者的資訊。家人等住址相同時可一鍵複製。'},
+  stepBTitle: {ja:'宿泊者情報', en:'Guest Information', ko:'숙박자 정보', zhCN:'住宿者信息', zhTW:'住宿者資訊'},
+  repIdTitle: {ja:'代表者の本人確認書類', en:"Representative's ID Document", ko:'대표자 신분증', zhCN:'代表人身份证件', zhTW:'代表人身份證件'},
+  repIdUploadTitle: {ja:'運転免許証 / マイナンバーカード / パスポート のいずれか', en:"Driver's License / My Number Card / Passport (any one)", ko:'운전면허증 / 마이넘버카드 / 여권 중 하나', zhCN:'驾照 / 我的号码卡 / 护照（任选其一）', zhTW:'駕照 / 我的號碼卡 / 護照（任選其一）'},
+  repIdUploadSub: {ja:'クリックしてアップロード(ダミー) ・ JPEG, PNG, PDF', en:'Click to upload (demo) ・ JPEG, PNG, PDF', ko:'클릭하여 업로드(데모) ・ JPEG, PNG, PDF', zhCN:'点击上传（示例） ・ JPEG, PNG, PDF', zhTW:'點擊上傳（示例） ・ JPEG, PNG, PDF'},
+  repIdHint: {ja:'宿泊者全員が日本国籍のため、代表者お一人分の提示で構いません。', en:"Since all guests hold Japanese nationality, only the representative needs to provide ID.", ko:'숙박자 전원이 일본 국적이므로 대표자 1인의 신분증만 제출하시면 됩니다.', zhCN:'由于所有住宿者均为日本国籍，仅需代表人一人提交证件即可。', zhTW:'由於所有住宿者均為日本國籍，僅需代表人一人提交證件即可。'},
+  bannerNoticeLabel: {ja:'ご案内：', en:'Notice: ', ko:'안내: ', zhCN:'提示：', zhTW:'提示：'},
+  bannerNoticeText: {ja:'ご入力内容および本人確認書類の確認が取れ次第、玄関の暗証番号をお送りいたします。', en:'Once we have confirmed your information and ID documents, we will send you the entrance door passcode.', ko:'입력하신 내용과 신분증 확인이 완료되는 대로 현관 비밀번호를 보내드립니다.', zhCN:'确认您填写的信息及身份证件后，我们将发送玄关密码给您。', zhTW:'確認您填寫的資訊及身份證件後，我們將發送玄關密碼給您。'},
+  btnConfirm: {ja:'内容を確認する', en:'Review My Information', ko:'내용 확인하기', zhCN:'确认填写内容', zhTW:'確認填寫內容'},
+  errorBannerPrefix: {ja:'入力内容をご確認ください：', en:'Please check the following:', ko:'입력 내용을 확인해 주세요:', zhCN:'请确认以下内容：', zhTW:'請確認以下內容：'},
+
+  labelName: {ja:'氏名', en:'Full Name', ko:'성명', zhCN:'姓名', zhTW:'姓名'},
+  placeholderName: {ja:'例）中島 陽子', en:'e.g. Yoko Nakajima', ko:'예) 나카지마 요코', zhCN:'例）中島 陽子', zhTW:'例）中島 陽子'},
+  labelAge: {ja:'年齢', en:'Age', ko:'나이', zhCN:'年龄', zhTW:'年齡'},
+  ageSelectPlaceholder: {ja:'選択してください', en:'Please select', ko:'선택해 주세요', zhCN:'请选择', zhTW:'請選擇'},
+  ageUnit: {ja:'歳', en:'', ko:'세', zhCN:'岁', zhTW:'歲'},
+  labelNat: {ja:'国籍', en:'Nationality', ko:'국적', zhCN:'国籍', zhTW:'國籍'},
+  labelPassport: {ja:'旅券番号', en:'Passport Number', ko:'여권 번호', zhCN:'护照号码', zhTW:'護照號碼'},
+  passportUploadTitle: {ja:'パスポート画像をアップロード', en:'Upload Passport Photo', ko:'여권 사진 업로드', zhCN:'上传护照照片', zhTW:'上傳護照照片'},
+  passportUploadSub: {ja:'クリックしてアップロード(ダミー)', en:'Click to upload (demo)', ko:'클릭하여 업로드(데모)', zhCN:'点击上传（示例）', zhTW:'點擊上傳（示例）'},
+  labelZip: {ja:'郵便番号', en:'Postal Code', ko:'우편번호', zhCN:'邮政编码', zhTW:'郵遞區號'},
+  btnZipSearch: {ja:'住所を検索', en:'Look up Address', ko:'주소 검색', zhCN:'查询地址', zhTW:'查詢地址'},
+  labelAddr: {ja:'住所', en:'Address', ko:'주소', zhCN:'住址', zhTW:'住址'},
+  placeholderAddr: {ja:'番地・建物名まで入力してください', en:'Please enter street number and building name', ko:'번지·건물명까지 입력해 주세요', zhCN:'请填写门牌号及建筑物名称', zhTW:'請填寫門牌號及建築物名稱'},
+  labelPhone: {ja:'電話番号', en:'Phone Number', ko:'전화번호', zhCN:'电话号码', zhTW:'電話號碼'},
+  labelEmail: {ja:'メールアドレス', en:'Email Address', ko:'이메일 주소', zhCN:'电子邮箱', zhTW:'電子郵件'},
+  sameAddrCheckbox: {ja:'代表者と同じ住所', en:'Same address as representative', ko:'대표자와 같은 주소', zhCN:'与代表人地址相同', zhTW:'與代表人地址相同'},
+  addrCopyPlaceholder: {ja:'（代表者の住所が入ります）', en:"(Representative's address will be used)", ko:'(대표자의 주소가 입력됩니다)', zhCN:'（将自动填入代表人的住址）', zhTW:'（將自動填入代表人的住址）'},
+
+  repGuestLabel: {ja:'代表者（宿泊者1）', en:'Representative (Guest 1)', ko:'대표자（숙박자 1）', zhCN:'代表人（住宿者1）', zhTW:'代表人（住宿者1）'},
+  guestLabelN: {ja:'宿泊者{n}', en:'Guest {n}', ko:'숙박자{n}', zhCN:'住宿者{n}', zhTW:'住宿者{n}'},
+  notEntered: {ja:'（未入力）', en:'(not entered)', ko:'(미입력)', zhCN:'（未填写）', zhTW:'（未填寫）'},
+
+  zipSearching: {ja:'検索中…', en:'Searching…', ko:'검색 중…', zhCN:'搜索中…', zhTW:'搜尋中…'},
+  zipFound: {ja:'{addr} が見つかりました。番地以降を入力してください。', en:'Found: {addr}. Please enter the rest of the address.', ko:'{addr}(을)를 찾았습니다. 번지 이하를 입력해 주세요.', zhCN:'已找到：{addr}。请填写门牌号以下的地址。', zhTW:'已找到：{addr}。請填寫門牌號以下的地址。'},
+  zipNotFound: {ja:'該当する住所が見つかりませんでした。お手数ですが直接ご入力ください。', en:'No matching address was found. Please enter your address manually.', ko:'일치하는 주소를 찾을 수 없습니다. 직접 입력해 주세요.', zhCN:'未找到匹配的地址，请直接手动填写。', zhTW:'未找到符合的地址，請直接手動填寫。'},
+
+  errName: {ja:'{label}の氏名が入力されていません。', en:"{label}'s name has not been entered.", ko:'{label}의 성명이 입력되지 않았습니다.', zhCN:'尚未填写{label}的姓名。', zhTW:'尚未填寫{label}的姓名。'},
+  errAge: {ja:'{label}の年齢が入力されていません。', en:"{label}'s age has not been selected.", ko:'{label}의 나이가 입력되지 않았습니다.', zhCN:'尚未选择{label}的年龄。', zhTW:'尚未選擇{label}的年齡。'},
+  errPassport: {ja:'{label}の旅券番号が入力されていません。', en:"{label}'s passport number has not been entered.", ko:'{label}의 여권 번호가 입력되지 않았습니다.', zhCN:'尚未填写{label}的护照号码。', zhTW:'尚未填寫{label}的護照號碼。'},
+  errRepAddr: {ja:'代表者の住所が入力されていません。', en:"The representative's address has not been entered.", ko:'대표자의 주소가 입력되지 않았습니다.', zhCN:'尚未填写代表人的住址。', zhTW:'尚未填寫代表人的住址。'},
+  errRepPhone: {ja:'代表者の電話番号が入力されていません。', en:"The representative's phone number has not been entered.", ko:'대표자의 전화번호가 입력되지 않았습니다.', zhCN:'尚未填写代表人的电话号码。', zhTW:'尚未填寫代表人的電話號碼。'},
+  errRepEmail: {ja:'代表者のメールアドレスが入力されていません。', en:"The representative's email address has not been entered.", ko:'대표자의 이메일 주소가 입력되지 않았습니다.', zhCN:'尚未填写代表人的电子邮箱。', zhTW:'尚未填寫代表人的電子郵件。'},
+  errGuestAddr: {ja:'{label}の住所が入力されていません。', en:"{label}'s address has not been entered.", ko:'{label}의 주소가 입력되지 않았습니다.', zhCN:'尚未填写{label}的住址。', zhTW:'尚未填寫{label}的住址。'},
+  errRepDoc: {ja:'代表者の本人確認書類がアップロードされていません。', en:"The representative's ID document has not been uploaded.", ko:'대표자의 신분증이 업로드되지 않았습니다.', zhCN:'尚未上传代表人的身份证件。', zhTW:'尚未上傳代表人的身份證件。'},
+  errPassportDoc: {ja:'{name} のパスポート画像がアップロードされていません。', en:"{name}'s passport photo has not been uploaded.", ko:'{name}님의 여권 사진이 업로드되지 않았습니다.', zhCN:'尚未上传{name}的护照照片。', zhTW:'尚未上傳{name}的護照照片。'},
+  uploadedStatus: {ja:'アップロード済み', en:'Uploaded', ko:'업로드 완료', zhCN:'已上传', zhTW:'已上傳'},
+
+  reviewTitle: {ja:'{name}様、内容のご確認', en:'{name}, Please Review Your Information', ko:'{name}님, 입력 내용을 확인해 주세요', zhCN:'{name} 您好，请确认填写内容', zhTW:'{name} 您好，請確認填寫內容'},
+  reviewSub: {ja:'宿泊者全員分の入力内容です。お間違いがないかご確認ください。', en:'Here is the information entered for all guests. Please check that everything is correct.', ko:'모든 숙박자의 입력 내용입니다. 틀린 부분이 없는지 확인해 주세요.', zhCN:'以下为所有住宿者填写的信息，请确认内容是否正确。', zhTW:'以下為所有住宿者填寫的資訊，請確認內容是否正確。'},
+  sectionConfirmTag: {ja:'確認', en:'Review', ko:'확인', zhCN:'确认', zhTW:'確認'},
+  sectionGuestInfoTitle: {ja:'宿泊者情報', en:'Guest Information', ko:'숙박자 정보', zhCN:'住宿者信息', zhTW:'住宿者資訊'},
+  reviewBanner: {ja:'内容に誤りがある場合は「戻る」から修正してください。よろしければホストへ送信してください。', en:'If anything is incorrect, tap "Back" to make changes. If everything looks good, please send it to your host.', ko:'내용에 오류가 있으면 「뒤로」에서 수정해 주세요. 문제가 없으면 호스트에게 전송해 주세요.', zhCN:'如内容有误，请点击「返回」修改。确认无误后请发送给房东。', zhTW:'如內容有誤，請點擊「返回」修改。確認無誤後請發送給房東。'},
+  reviewBannerEdit: {ja:'内容に誤りがある場合は「戻る」から修正してください。よろしければ当日確認画面に戻ってください。', en:'If anything is incorrect, tap "Back" to make changes. If everything looks good, return to the arrival day check.', ko:'내용에 오류가 있으면 「뒤로」에서 수정해 주세요. 문제가 없으면 당일 확인 화면으로 돌아가 주세요.', zhCN:'如内容有误，请点击「返回」修改。确认无误后请返回入住当天确认画面。', zhTW:'如內容有誤，請點擊「返回」修改。確認無誤後請返回入住當天確認畫面。'},
+  btnReturnDay4: {ja:'当日確認に戻る', en:'Return to Arrival Day Check', ko:'당일 확인으로 돌아가기', zhCN:'返回入住当天确认', zhTW:'返回入住當天確認'},
+  btnBack: {ja:'戻る', en:'Back', ko:'뒤로', zhCN:'返回', zhTW:'返回'},
+  btnSendHost: {ja:'ホストに情報を送信する', en:'Send Information to Host', ko:'호스트에게 정보 전송', zhCN:'将信息发送给房东', zhTW:'將資訊發送給房東'},
+
+  stampThanksS1: {ja:'送信完了', en:'Sent', ko:'전송 완료', zhCN:'提交完成', zhTW:'提交完成'},
+  screen3Title: {ja:'ご入力ありがとうございました', en:'Thank You for Submitting Your Information', ko:'입력해 주셔서 감사합니다', zhCN:'感谢您的填写', zhTW:'感謝您的填寫'},
+  screen3Sub: {ja:'内容をホストに送信しました。この後、ホストよりメールまたはメッセージにて、ご入力のお礼と玄関の暗証番号をご案内いたします。', en:'Your information has been sent to your host. They will follow up by email or message to thank you and share the entrance door passcode.', ko:'내용이 호스트에게 전송되었습니다. 이후 호스트가 이메일 또는 메시지로 감사 인사와 함께 현관 비밀번호를 안내해 드립니다.', zhCN:'内容已发送给房东。之后房东将通过邮件或消息向您致谢，并告知玄关密码。', zhTW:'內容已發送給房東。之後房東將透過郵件或訊息向您致謝，並告知玄關密碼。'},
+  guideSectionTag: {ja:'ご案内', en:'Guide', ko:'안내', zhCN:'指南', zhTW:'指南'},
+  guideSectionTitle: {ja:'お家の使い方ガイド', en:'House Guide', ko:'숙소 이용 가이드', zhCN:'住宿使用指南', zhTW:'住宿使用指南'},
+  guideSub: {ja:'ご滞在中の設備の使い方やチェックアウト方法をまとめています。ご到着前にぜひご一読ください。', en:'This guide covers how to use the facilities and how to check out. Please take a look before you arrive.', ko:'숙박 중 시설 이용법과 체크아웃 방법을 정리했습니다. 도착 전에 꼭 읽어봐 주세요.', zhCN:'本指南整理了设备使用方法及退房流程，请于抵达前阅读。', zhTW:'本指南整理了設備使用方法及退房流程，請於抵達前閱讀。'},
+  btnGuide: {ja:'お家の使い方ガイドを見る ↗', en:'View House Guide ↗', ko:'숙소 이용 가이드 보기 ↗', zhCN:'查看住宿使用指南 ↗', zhTW:'查看住宿使用指南 ↗'},
+  btnDemoDay: {ja:'チェックイン当日の画面を見る（デモ用） →', en:'View Arrival Day Screen (Demo) →', ko:'체크인 당일 화면 보기(데모) →', zhCN:'查看入住当天画面（示例） →', zhTW:'查看入住當天畫面（示例） →'},
+
+  screen4Title: {ja:'チェックイン当日のご確認', en:'Arrival Day Confirmation', ko:'체크인 당일 확인', zhCN:'入住当天确认', zhTW:'入住當天確認'},
+  screen4Sub: {ja:'ご到着後、ご自身のスマートフォンで入力内容にお間違いがないかご確認のうえ、顔認証による本人確認と滞在確認を行ってください。', en:'After you arrive, please use your own smartphone to check your information, complete face verification, and confirm your stay.', ko:'도착 후 본인의 스마트폰으로 입력 내용에 오류가 없는지 확인하시고, 안면 인식 본인 확인과 숙박 확인을 진행해 주세요.', zhCN:'抵达后，请使用您自己的智能手机确认填写内容无误，并完成人脸识别身份验证及入住确认。', zhTW:'抵達後，請使用您自己的智慧型手機確認填寫內容無誤，並完成人臉辨識身份驗證及入住確認。'},
+  screen4Banner: {ja:'内容に相違がある場合はホストまでご連絡ください。相違なければ顔認証にお進みください。', en:'If anything is incorrect, please contact your host. If everything is correct, please proceed to face verification.', ko:'내용에 차이가 있으면 호스트에게 연락해 주세요. 문제가 없으면 안면 인식으로 진행해 주세요.', zhCN:'如内容有误，请联系房东。确认无误后请进行人脸识别。', zhTW:'如內容有誤，請聯繫房東。確認無誤後請進行人臉辨識。'},
+  faceSectionTitle: {ja:'顔認証（宿泊者おひとりずつ）', en:'Face Verification (One Guest at a Time)', ko:'안면 인식（숙박자 개별 진행）', zhCN:'人脸识别（依序进行）', zhTW:'人臉辨識（依序進行）'},
+  faceStatusPending: {ja:'未確認', en:'Not verified', ko:'미확인', zhCN:'待验证', zhTW:'待驗證'},
+  faceStatusCurrent: {ja:'認証中', en:'Verifying', ko:'인증 중', zhCN:'验证中', zhTW:'驗證中'},
+  faceStatusDone: {ja:'確認済み', en:'Verified', ko:'확인 완료', zhCN:'已验证', zhTW:'已驗證'},
+  faceHint: {ja:'ご提出いただいた本人確認書類の顔写真と照合します。ガイド内にお顔が収まるようにしてください。', en:'We will compare this photo with the face photo on your submitted ID document. Please keep your face within the guide.', ko:'제출하신 신분증의 얼굴 사진과 대조합니다. 가이드 안에 얼굴이 들어오도록 해 주세요.', zhCN:'将与您提交的证件照片进行人脸比对，请将脸部对准取景框。', zhTW:'將與您提交的證件照片進行人臉比對，請將臉部對準取景框。'},
+  faceQueueLabel: {ja:'{n} / {total}人目：{name}様', en:'{n} of {total}: {name}', ko:'{n} / {total}번째: {name}님', zhCN:'第 {n} / {total} 位：{name}', zhTW:'第 {n} / {total} 位：{name}'},
+  faceCaptureBtn: {ja:'{name}様を撮影する', en:'Take Photo of {name}', ko:'{name}님 촬영하기', zhCN:'为{name}拍照', zhTW:'為{name}拍照'},
+  faceCaptureDone: {ja:'撮影完了', en:'Photo Taken', ko:'촬영 완료', zhCN:'拍摄完成', zhTW:'拍攝完成'},
+  faceMatching: {ja:'{name}様の提出書類の写真と照合中…', en:"Comparing with {name}'s submitted document photo…", ko:'{name}님의 제출 서류 사진과 대조 중…', zhCN:'正在与{name}提交的证件照片比对中…', zhTW:'正在與{name}提交的證件照片比對中…'},
+  faceMatched: {ja:'一致率 98.2% ・ {name}様の本人確認が完了しました', en:'Match 98.2% ・ Identity verified for {name}', ko:'일치율 98.2% ・ {name}님의 본인 확인이 완료되었습니다', zhCN:'匹配率 98.2% ・ {name}的身份验证已完成', zhTW:'匹配率 98.2% ・ {name}的身份驗證已完成'},
+  faceStampS1: {ja:'確認', en:'Verified', ko:'확인', zhCN:'确认', zhTW:'確認'},
+  btnStayConfirm: {ja:'この内容で滞在を確認する', en:'Confirm My Stay', ko:'이 내용으로 숙박 확인', zhCN:'确认入住信息', zhTW:'確認入住資訊'},
+  stayStampS1: {ja:'確認', en:'Confirmed', ko:'확인', zhCN:'确认', zhTW:'確認'},
+  labelRoom: {ja:'お部屋番号', en:'Room Number', ko:'객실 번호', zhCN:'房间号', zhTW:'房間號'},
+  labelWifiPass: {ja:'Wi-Fiパスワード', en:'Wi-Fi Password', ko:'Wi-Fi 비밀번호', zhCN:'Wi-Fi 密码', zhTW:'Wi-Fi 密碼'},
+  labelCheckout: {ja:'チェックアウト', en:'Check-out', ko:'체크아웃', zhCN:'退房', zhTW:'退房'},
+  checkoutNote: {ja:'10:00 までにスマートロックが自動施錠されます', en:'The smart lock will automatically lock at 10:00', ko:'10:00까지 스마트락이 자동으로 잠깁니다', zhCN:'10:00前智能锁将自动上锁', zhTW:'10:00前智慧鎖將自動上鎖'},
+  labelEmergency: {ja:'緊急連絡先', en:'Emergency Contact', ko:'긴급 연락처', zhCN:'紧急联系方式', zhTW:'緊急聯絡方式'},
+  emergencyNote: {ja:'（24時間対応）', en:' (Available 24 hours)', ko:' (24시간 대응)', zhCN:'（24小时应对）', zhTW:'（24小時應對）'},
+  btnEditInfo: {ja:'入力内容を修正する', en:'Edit My Information', ko:'입력 내용 수정하기', zhCN:'修改填写内容', zhTW:'修改填寫內容'},
+
+  footerNote: {ja:'画面イメージ（モック）です。実データの送信・保存は行われません。', en:'This is a UI mockup. No real data is sent or stored.', ko:'이것은 화면 이미지(목업)입니다. 실제 데이터의 송수신·저장은 이루어지지 않습니다.', zhCN:'此为界面示意图（原型），不会实际发送或保存数据。', zhTW:'此為介面示意圖（原型），不會實際發送或保存資料。'}
+};
+
+function t(key, vars){
+  const entry = I18N[key];
+  let s = entry ? (entry[LANG] || entry.ja) : key;
+  if(vars){
+    Object.keys(vars).forEach(k=>{
+      s = s.split('{'+k+'}').join(vars[k]);
+    });
+  }
+  return s;
+}
+
+function refreshNatOptions(){
+  document.querySelectorAll('.g-nat').forEach(sel=>{
+    const cur = sel.value;
+    sel.innerHTML = natOptionsHTML();
+    if(cur) sel.value = cur;
+  });
+}
+
+function refreshUploadTexts(){
+  document.querySelectorAll('.upload-slot').forEach(slot=>{
+    const sEl = slot.querySelector('.meta .s');
+    if(!sEl) return;
+    if(slot.classList.contains('filled')){
+      sEl.textContent = t('uploadedStatus');
+    } else if(slot.dataset.subKey){
+      sEl.textContent = t(slot.dataset.subKey);
+    }
+  });
+}
+
+function refreshAgeOptions(){
+  document.querySelectorAll('.g-age').forEach(sel=>{
+    const cur = sel.value;
+    sel.innerHTML = ageOptionsHTML();
+    if(cur) sel.value = cur;
+  });
+}
+
+function applyI18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  document.querySelectorAll('.gname[data-gnum]').forEach(el=>{
+    el.textContent = guestLabel(el.dataset.gnum, el.dataset.rep === '1');
+  });
+  document.querySelectorAll('.addr-copy-disp').forEach(el=>{
+    const repAddr = (document.getElementById('addr-1') || {}).value || '';
+    if(!repAddr) el.textContent = t('addrCopyPlaceholder');
+  });
+  refreshUploadTexts();
+  refreshNatOptions();
+  refreshAgeOptions();
+}
+
+const LANG_NATIVE_NAME = {ja:'日本語', en:'English', ko:'한국어', zhCN:'中文（简体）', zhTW:'中文（繁體）'};
+
+function setLang(lang){
+  LANG = lang;
+  document.documentElement.lang = {ja:'ja', en:'en', ko:'ko', zhCN:'zh-CN', zhTW:'zh-TW'}[lang] || 'ja';
+  applyI18n();
+
+  const switchBtn = document.getElementById('langSwitchBtn');
+  if(switchBtn) switchBtn.textContent = LANG_NATIVE_NAME[lang] || LANG_NATIVE_NAME.ja;
+
+  const activeScreen = document.querySelector('.screen.active');
+  if(activeScreen){
+    const n = parseInt(activeScreen.id.replace('screen',''));
+    if(n === 2){ populateReview('reviewSummary'); updateSendButton(); }
+    if(n === 4){ relabelFaceStep(); }
+  }
+}
+
+// door QR uses a fixed URL like .../checkin.html?mode=arrival — this jumps guests
+// straight to STEP04 after they pick a language, instead of starting at STEP01.
+// In production this URL carries no reservation ID: the backend looks up
+// "today's check-in, not yet checked out" on its own (see chat discussion).
+const ARRIVAL_MODE = new URLSearchParams(location.search).get('mode') === 'arrival';
+
+function selectLang(lang){
+  setLang(lang);
+  document.getElementById('langGate').style.display = 'none';
+  document.getElementById('mainFlow').style.display = 'block';
+  if(ARRIVAL_MODE){
+    goStep(4);
+  }
+}
+
+function showLangGate(){
+  document.getElementById('mainFlow').style.display = 'none';
+  document.getElementById('langGate').style.display = 'block';
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  applyI18n();
+  renderGuestCards();
+  const switchBtn = document.getElementById('langSwitchBtn');
+  if(switchBtn) switchBtn.textContent = LANG_NATIVE_NAME[LANG] || LANG_NATIVE_NAME.ja;
+
+  if(ARRIVAL_MODE){
+    // hide the pre-arrival steps in the ticket-strip; arrival day starts at STEP04
+    document.querySelectorAll('.step[data-go="1"], .step[data-go="2"], .step[data-go="3"]').forEach(s=>{
+      s.style.display = 'none';
+    });
+  }
+});
+
+</script>
+</body>
+</html>
