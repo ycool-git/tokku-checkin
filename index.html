@@ -142,7 +142,7 @@
     padding:14px 6px 12px;
     text-align:center;
     position:relative;
-    cursor:pointer;
+    cursor:default;
     color:rgba(255,255,255,.42);
     transition:color .25s;
   }
@@ -670,7 +670,7 @@
             <span>⚠</span>
             <div>
               <div id="locErrorText"></div>
-              <button type="button" class="btn btn-ghost mt8" onclick="requestArrivalLocation()" data-i18n="btnRetryLocation"></button>
+              <button type="button" class="btn btn-ghost mt8" id="locRetryBtn" onclick="retryLocation()" data-i18n="btnRetryLocation"></button>
             </div>
           </div>
         </div>
@@ -732,9 +732,6 @@ function goStep(n){
   if(n===2){ populateReview('reviewSummary'); updateSendButton(); }
   if(n===4){ resetStayConfirm(); editingFromDay4 = false; }
 }
-document.querySelectorAll('.step').forEach(s=>{
-  s.addEventListener('click', ()=>goStep(parseInt(s.dataset.go)));
-});
 
 function goEditInfo(){
   editingFromDay4 = true;
@@ -771,6 +768,7 @@ function prefillFormFromServerData(){
 
     if(gnum === '1'){
       document.getElementById('addr-1').value = g.address || '';
+      document.getElementById('zip-1').value = g.zip || '';
       document.getElementById('repPhone').value = serverGuestData.repPhone || '';
       document.getElementById('repEmail').value = serverGuestData.repEmail || '';
     } else {
@@ -783,6 +781,8 @@ function prefillFormFromServerData(){
       if(!sameAsRep){
         const ownAddr = document.getElementById('addr-'+gnum);
         if(ownAddr) ownAddr.value = g.address || '';
+        const ownZip = document.getElementById('zip-'+gnum);
+        if(ownZip) ownZip.value = g.zip || '';
       }
     }
 
@@ -828,6 +828,7 @@ function syncServerDataFromForm(){
       age: g.age,
       nationality: g.nat,
       address: g.addr,
+      zip: g.zip,
       passportNo: g.passportNo,
       docUrl: prev.docUrl || ''
     };
@@ -867,7 +868,7 @@ function buildGuestsPayload(){
     const fileKey = g.isRep ? 'repIdUpload' : ('passportUpload-' + g.gnum);
     const file = uploadedFiles[fileKey];
     return {
-      name: g.name, age: g.age, nationality: g.nat, address: g.addr,
+      name: g.name, age: g.age, nationality: g.nat, address: g.addr, zip: g.zip,
       passportNo: g.passportNo,
       docBase64: file ? file.base64 : '',
       docMimeType: file ? file.mimeType : ''
@@ -1213,12 +1214,14 @@ function collectGuestsFromDOM(){
   return [...document.querySelectorAll('#guestCardsWrap .guestcard')].map(card=>{
     const gnum = card.dataset.guest;
     const isRep = gnum === '1';
+    const zipEl = document.getElementById('zip-'+gnum);
     return {
       gnum, isRep,
       name: (card.querySelector('.g-name').value || '').trim(),
       age: (card.querySelector('.g-age').value || '').trim(),
       nat: card.querySelector('.g-nat').value,
       addr: guestAddress(card),
+      zip: zipEl ? (zipEl.value || '').trim() : '',
       passportNo: (card.querySelector('.g-passno').value || '').trim(),
       phone: isRep ? (document.getElementById('repPhone').value || '').trim() : '',
       email: isRep ? (document.getElementById('repEmail').value || '').trim() : ''
@@ -1235,6 +1238,7 @@ function collectGuestsFromServer(){
     age: g.age || '',
     nat: g.nationality || 'JP',
     addr: g.address || '',
+    zip: g.zip || '',
     passportNo: g.passportNo || '',
     phone: idx === 0 ? (serverGuestData.repPhone || '') : '',
     email: idx === 0 ? (serverGuestData.repEmail || '') : ''
@@ -1408,30 +1412,47 @@ function requestArrivalLocation(){
   const el = document.getElementById('locStatus');
   hideLocError();
 
-  if(!('geolocation' in navigator)){
-    arrivalLocationStatus = 'unsupported';
-    if(el) el.textContent = '';
-    showLocError('locUnsupportedBannerText');
-    return;
-  }
-  arrivalLocationStatus = 'requesting';
-  if(el) el.textContent = t('locRequesting');
-  navigator.geolocation.getCurrentPosition(
-    pos=>{
-      arrivalLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
-      arrivalLocationStatus = 'ok';
-      const s = document.getElementById('locStatus');
-      if(s) s.textContent = t('locOk');
-      hideLocError();
-    },
-    ()=>{
-      arrivalLocationStatus = 'denied';
-      const s = document.getElementById('locStatus');
-      if(s) s.textContent = '';
-      showLocError('locDeniedBannerText');
-    },
-    { enableHighAccuracy: true, timeout: 10000 }
-  );
+  return new Promise(resolve=>{
+    if(!('geolocation' in navigator)){
+      arrivalLocationStatus = 'unsupported';
+      if(el) el.textContent = '';
+      showLocError('locUnsupportedBannerText');
+      resolve(false);
+      return;
+    }
+    arrivalLocationStatus = 'requesting';
+    if(el) el.textContent = t('locRequesting');
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        arrivalLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        arrivalLocationStatus = 'ok';
+        const s = document.getElementById('locStatus');
+        if(s) s.textContent = t('locOk');
+        hideLocError();
+        resolve(true);
+      },
+      ()=>{
+        arrivalLocationStatus = 'denied';
+        const s = document.getElementById('locStatus');
+        if(s) s.textContent = '';
+        showLocError('locDeniedBannerText');
+        resolve(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+}
+
+// Browsers won't show the permission prompt again once a site has been
+// explicitly blocked — retrying here only re-checks the current permission,
+// it can't force the dialog back open. The button still needs to visibly do
+// something (loading state) so the guest knows their tap registered, and the
+// banner text explains the manual settings change that's actually required.
+async function retryLocation(){
+  const btn = document.getElementById('locRetryBtn');
+  if(btn){ btn.disabled = true; btn.textContent = t('locRetrying'); }
+  await requestArrivalLocation();
+  if(btn){ btn.disabled = false; btn.textContent = t('btnRetryLocation'); }
 }
 
 function resetStayConfirm(){
@@ -1744,9 +1765,10 @@ const I18N = {
   faceCaptured: {ja:'{name}様の撮影が完了しました', en:"Photo captured for {name}", ko:'{name}님 촬영이 완료되었습니다', zhCN:'{name}的照片已拍摄完成', zhTW:'{name}的照片已拍攝完成'},
   locRequesting: {ja:'位置情報を取得しています…', en:'Getting your location…', ko:'위치 정보를 가져오는 중…', zhCN:'正在获取位置信息…', zhTW:'正在取得位置資訊…'},
   locOk: {ja:'位置情報を記録しました', en:'Location recorded', ko:'위치 정보가 기록되었습니다', zhCN:'已记录位置信息', zhTW:'已記錄位置資訊'},
-  locDeniedBannerText: {ja:'位置情報の利用が許可されていません。チェックインを完了するには、この端末の設定で位置情報の利用を許可してから、もう一度お試しください。', en:'Location access is not allowed. To complete check-in, please enable location permission in your device settings, then try again.', ko:'위치 정보 사용이 허용되지 않았습니다. 체크인을 완료하려면 기기 설정에서 위치 정보 사용을 허용한 후 다시 시도해 주세요.', zhCN:'未允许使用位置信息。若要完成入住手续，请在设备设置中允许位置信息访问后重试。', zhTW:'未允許使用位置資訊。若要完成入住手續，請在裝置設定中允許位置資訊存取後重試。'},
+  locDeniedBannerText: {ja:'位置情報の利用が許可されていません。ブラウザの「アドレスバーの鍵マーク(またはサイト設定)」から位置情報を「許可」に変更したうえで、下のボタンを押してください。設定を変えずに押しても再度エラーになります。', en:"Location access is not allowed. Open your browser's site settings (tap the lock icon in the address bar), set Location to Allow, then press the button below. Pressing it without changing the setting will show the same error again.", ko:'위치 정보 사용이 허용되지 않았습니다. 브라우저의 주소창 자물쇠 아이콘(또는 사이트 설정)에서 위치 정보를 허용으로 변경한 후 아래 버튼을 눌러 주세요. 설정을 바꾸지 않고 누르면 다시 같은 오류가 표시됩니다.', zhCN:'未允许使用位置信息。请在浏览器的网站设置（点击地址栏的锁形图标）中将位置信息设为允许，然后点击下方按钮。若不修改设置直接点击，将再次出现相同错误。', zhTW:'未允許使用位置資訊。請在瀏覽器的網站設定（點擊網址列的鎖形圖示）中將位置資訊設為允許，然後點擊下方按鈕。若不修改設定直接點擊，將再次出現相同錯誤。'},
   locUnsupportedBannerText: {ja:'このブラウザでは位置情報を取得できません。SafariやChromeなど標準のブラウザで開き直してください。', en:"This browser can't access your location. Please reopen this page in Safari or Chrome.", ko:'이 브라우저에서는 위치 정보를 가져올 수 없습니다. Safari나 Chrome 등 표준 브라우저에서 다시 열어 주세요.', zhCN:'此浏览器无法获取位置信息，请使用Safari或Chrome等标准浏览器重新打开此页面。', zhTW:'此瀏覽器無法取得位置資訊，請使用Safari或Chrome等標準瀏覽器重新開啟此頁面。'},
   btnRetryLocation: {ja:'もう一度試す', en:'Try Again', ko:'다시 시도', zhCN:'重试', zhTW:'重試'},
+  locRetrying: {ja:'確認中…', en:'Checking…', ko:'확인 중…', zhCN:'确认中…', zhTW:'確認中…'},
   btnRetake: {ja:'撮り直す', en:'Retake Photo', ko:'다시 촬영', zhCN:'重新拍摄', zhTW:'重新拍攝'},
   btnRetakeThisGuest: {ja:'写真を撮り直す', en:"Retake This Guest's Photo", ko:'사진 다시 촬영', zhCN:'重新拍摄照片', zhTW:'重新拍攝照片'},
   btnUsePhoto: {ja:'この写真で進む', en:'Use This Photo', ko:'이 사진으로 진행', zhCN:'使用此照片', zhTW:'使用此照片'},
