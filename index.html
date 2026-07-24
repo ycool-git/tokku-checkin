@@ -1453,7 +1453,7 @@ function requestArrivalLocation(){
       updateLocPermUI();
       resolve(false);
     };
-    const safetyTimer = setTimeout(finishDenied, 6000);
+    const safetyTimer = setTimeout(finishDenied, 20000);
 
     navigator.geolocation.getCurrentPosition(
       pos=>{
@@ -1472,7 +1472,7 @@ function requestArrivalLocation(){
         clearTimeout(safetyTimer);
         finishDenied();
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
     );
   });
 }
